@@ -1,7 +1,7 @@
 name: wavedrive
 description: Your road. Your radio.
 publish_to: none
-version: 1.0.6+12
+version: 1.0.7+13
 environment:
   sdk: '>=3.4.0 <4.0.0'
 dependencies:
