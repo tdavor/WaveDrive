@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'radio_handler.dart';
+import 'update_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +9,7 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.0-alpha.5';
+const appVersion='1.0.0-alpha.6';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +33,14 @@ class _RadioHomeState extends State<RadioHome> {
   StreamSubscription<MediaItem?>? mediaSub;
   StreamSubscription<int>? historySub;
   @override void initState(){super.initState();init();mediaSub=radio.mediaItem.listen((m){if(m!=null&&mounted){setState(()=>current=radio.station(m));}});historySub=radio.historyChanged.listen((_) {radio.stored('recent').then((v){if(mounted)setState(()=>recent=v);});});}
+  bool checkingUpdate=false;
+  final updater=UpdateService();
   Future<void> init() async {
     final p=await SharedPreferences.getInstance();
     List<Station> read(String key)=>(jsonDecode(p.getString(key)??'[]') as List).map((j)=>Station.fromJson(Map<String,dynamic>.from(j))).toList();
     if(!mounted)return;
     setState((){favorites=read('favorites');recent=read('recent');lang=p.getString('language')??'en';});
+    unawaited(checkUpdate());
     await search();
   }
   Future<void> save() async {
@@ -67,6 +71,56 @@ class _RadioHomeState extends State<RadioHome> {
   void chooseCountry(String c){setState((){country=c;tab=1;});search();}
   void skip(int delta){final list=tab==2?favorites:tab==3?recent:stations;if(list.isEmpty)return;final i=list.indexWhere((s)=>s.id==current?.id);play(list[(i+delta+list.length)%list.length]);}
   ThemeData get radioTheme=>ThemeData.dark(useMaterial3:true).copyWith(scaffoldBackgroundColor:const Color(0xff101520),colorScheme:ColorScheme.fromSeed(seedColor:cyan,brightness:Brightness.dark));
+  Future<void> checkUpdate({bool manual=false}) async {
+    if(checkingUpdate)return;
+    checkingUpdate=true;
+    try{
+      final update=await updater.check(appVersion);
+      if(!mounted)return;
+      if(update==null){
+        if(manual)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr('You have the latest version','Du har senaste versionen','Imate najnoviju verziju'))));
+        return;
+      }
+      final ready=ValueNotifier<bool>(false);
+      final message=ValueNotifier<String>(tr('Downloading update…','Hämtar uppdatering…','Preuzimanje nadogradnje…'));
+      var installing=false;
+      final download=updater.download(update).then((_) {
+        ready.value=true;
+        message.value=tr('Update downloaded. Android will ask for installation approval.','Uppdateringen är hämtad. Android ber om installationsgodkännande.','Nadogradnja je preuzeta. Android će zatražiti potvrdu instalacije.');
+      }).catchError((Object e){
+        message.value=tr('Update download failed: ','Hämtning misslyckades: ','Preuzimanje nije uspjelo: ')+e.toString();
+      });
+      final completed=ValueNotifier<bool>(false);
+      unawaited(download.whenComplete(()=>completed.value=true));
+      await showDialog<void>(context:context,barrierDismissible:false,builder:(dialogContext){
+        Future<void> install() async {
+          if(installing)return;
+          installing=true;
+          try{
+            final result=await updater.install();
+            if(result=='permission')message.value=tr('Allow installation from WaveDrive, then return and tap Install.','Tillåt installation från WaveDrive, gå tillbaka och tryck Installera.','Dopustite instaliranje iz WaveDrivea, vratite se i pritisnite Instaliraj.');
+          }catch(e){message.value=tr('Installation failed: ','Installation misslyckades: ','Instalacija nije uspjela: ')+e.toString();}
+          finally{installing=false;}
+        }
+        return Theme(data:radioTheme,child:ValueListenableBuilder<bool>(valueListenable:completed,builder:(_,done,__)=>PopScope(canPop:done,child:AlertDialog(
+          title:Text(tr('New version','Ny version','Nova verzija')+' '+update.version),
+          content:Column(mainAxisSize:MainAxisSize.min,children:[
+            if(!done)const LinearProgressIndicator(),
+            const SizedBox(height:12),
+            ValueListenableBuilder<String>(valueListenable:message,builder:(_,v,__)=>Text(v))
+          ]),
+          actions:[
+            if(done)TextButton(onPressed:()=>Navigator.of(dialogContext).pop(),child:Text(tr('Later','Senare','Kasnije'))),
+            if(done&&ready.value)TextButton(onPressed:install,child:Text(tr('Install','Installera','Instaliraj')))
+          ]
+        ))));
+      });
+      await download;
+      ready.dispose();message.dispose();completed.dispose();
+    }catch(e){
+      if(mounted&&manual)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr('Update check failed','Uppdateringskontrollen misslyckades','Provjera nadogradnje nije uspjela'))));
+    }finally{checkingUpdate=false;}
+  }
   void showAbout(){
     showDialog<void>(context:context,builder:(_)=>Theme(data:radioTheme,child:AlertDialog(
       title:Text(tr('About WaveDrive','Om WaveDrive','O WaveDriveu')),
@@ -76,7 +130,7 @@ class _RadioHomeState extends State<RadioHome> {
         Text('Your road. Your radio.'),SizedBox(height:16),
         Text(tr('Version','Version','Verzija')+': '+appVersion),const SizedBox(height:8),Text(tr('Author','Författare','Autor')+': t.davor@gmail.com')
       ]),
-      actions:[TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
+      actions:[TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(checkUpdate(manual:true));},child:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje'))),TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
     )));
   }
   void openPlayer([Station? selected]){
