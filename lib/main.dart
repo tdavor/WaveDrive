@@ -10,7 +10,7 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.4';
+const appVersion='1.0.5';
 const brandLogo='assets/branding/wavedrive.webp';
 
 Future<void> main() async {
@@ -121,17 +121,30 @@ class _RadioHomeState extends State<RadioHome> {
   Future<void> play(Station s) async {
     setState((){current=s;error='';});
     try {
-      await radio.select(s,tab==2?favorites:tab==3?recent:stations);
+      await radio.select(s,tab==1?favorites:tab==2?recent:stations);
       final updated=await radio.stored('recent');if(mounted)setState(()=>recent=updated);
     }catch(_){if(mounted&&current==s)setState(()=>error=tr('Stream unavailable','Strömmen är otillgänglig','Stream nije dostupan'));}
   }
   @override void dispose(){mediaSub?.cancel();historySub?.cancel();query.dispose();super.dispose();}
   static const panel=Color(0xff202937), cyan=Color(0xff38bdf8);
-  Widget artwork(Station s,{double size=52})=>ClipRRect(borderRadius:BorderRadius.circular(12),child:Container(width:size,height:size,color:panel,child:s.logo.startsWith('http')?Image.network(s.logo,fit:BoxFit.contain,errorBuilder:(_,__,___)=>const Icon(Icons.radio,color:cyan)):const Icon(Icons.radio,color:cyan)));
+  Widget artwork(Station s,{double size=52})=>ClipRRect(borderRadius:BorderRadius.circular(12),child:Container(width:size,height:size,color:panel,child:s.logo.startsWith('http')?Image.network(s.logo,fit:BoxFit.contain,errorBuilder:(_,__,___)=>Image.asset(brandLogo,fit:BoxFit.contain)):Image.asset(brandLogo,fit:BoxFit.contain)));
   String flag(String code)=>code.isEmpty?'🌍':String.fromCharCodes(code.codeUnits.map((c)=>c+127397));
   final codes=['SE','HR','GB','DE','US','IT','FR','NO','DK','FI','BA','RS','SI','ES','PL','AU','CA','JP','BR','IN'];
-  void chooseCountry(String c){setState((){country=c;tab=1;});search();}
-  void skip(int delta){final list=tab==2?favorites:tab==3?recent:stations;if(list.isEmpty)return;final i=list.indexWhere((s)=>s.id==current?.id);play(list[(i+delta+list.length)%list.length]);}
+  String countryName(String code){
+    final names=<String,List<String>>{
+      'SE':['Sweden','Sverige','Švedska'],'HR':['Croatia','Kroatien','Hrvatska'],
+      'GB':['United Kingdom','Storbritannien','Ujedinjeno Kraljevstvo'],'DE':['Germany','Tyskland','Njemačka'],
+      'US':['United States','USA','SAD'],'IT':['Italy','Italien','Italija'],'FR':['France','Frankrike','Francuska'],
+      'NO':['Norway','Norge','Norveška'],'DK':['Denmark','Danmark','Danska'],'FI':['Finland','Finland','Finska'],
+      'BA':['Bosnia and Herzegovina','Bosnien och Hercegovina','Bosna i Hercegovina'],
+      'RS':['Serbia','Serbien','Srbija'],'SI':['Slovenia','Slovenien','Slovenija'],'ES':['Spain','Spanien','Španjolska'],
+      'PL':['Poland','Polen','Poljska'],'AU':['Australia','Australien','Australija'],'CA':['Canada','Kanada','Kanada'],
+      'JP':['Japan','Japan','Japan'],'BR':['Brazil','Brasilien','Brazil'],'IN':['India','Indien','Indija'],
+    };
+    final name=names[code];return name==null?code:tr(name[0],name[1],name[2]);
+  }
+  void chooseCountry(String c){setState(()=>country=c);search();}
+  void skip(int delta){unawaited(delta<0?radio.skipToPrevious():radio.skipToNext());}
   ThemeData get radioTheme=>ThemeData.dark(useMaterial3:true).copyWith(scaffoldBackgroundColor:const Color(0xff101520),colorScheme:ColorScheme.fromSeed(seedColor:cyan,brightness:Brightness.dark));
   Future<void> checkUpdate({bool manual=false}) async {
     if(checkingUpdate)return;
@@ -235,22 +248,29 @@ class _RadioHomeState extends State<RadioHome> {
     ))));
   }
   @override Widget build(BuildContext context){
-    final list=tab==2?favorites:tab==3?recent:stations;
+    final list=tab==1?favorites:tab==2?recent:stations;
     final theme=radioTheme;
     return Theme(data:theme,child:Scaffold(
       appBar:AppBar(backgroundColor:const Color(0xff101520),title:Row(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.asset(brandLogo,width:38,height:38,fit:BoxFit.contain)),const SizedBox(width:8),const Text('Wave',style:TextStyle(fontWeight:FontWeight.w800)),const Text('Drive',style:TextStyle(color:cyan,fontWeight:FontWeight.w800))]),actions:[PopupMenuButton<String>(icon:const Icon(Icons.settings_outlined),onSelected:(v){if(v=='about'){showAbout();return;}setState(()=>lang=v);save();},itemBuilder:(_)=>[const PopupMenuItem(value:'en',child:Text('English')),const PopupMenuItem(value:'sv',child:Text('Svenska')),const PopupMenuItem(value:'hr',child:Text('Hrvatski')),PopupMenuItem(value:'about',child:Text(tr('About','Om','O aplikaciji')))])]),
       body:SafeArea(child:Column(children:[
         Expanded(child:CustomScrollView(slivers:[
-          if(tab<2) SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,4,16,12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          if(tab==0) SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,4,16,12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             const Text('Your road. Your radio.',style:TextStyle(color:Colors.white70)),
             const SizedBox(height:18),
             TextField(controller:query,onSubmitted:(_)=>search(),decoration:InputDecoration(filled:true,fillColor:panel,prefixIcon:const Icon(Icons.search),hintText:tr('Search radio stations...','Sök radiostationer...','Traži radio stanice...'),suffixIcon:IconButton(onPressed:search,icon:const Icon(Icons.arrow_forward)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:BorderSide.none))),
-            const SizedBox(height:20),
-            Row(children:[Expanded(child:Text(tr('Explore countries','Utforska länder','Istraži države'),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold))),TextButton(onPressed:(){setState(()=>tab=tab==0?1:0);},child:Text(tab==0?tr('View all','Visa alla','Prikaži sve'):tr('Less','Färre','Manje')))]),
-            GridView.count(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisCount:4,mainAxisSpacing:8,crossAxisSpacing:8,childAspectRatio:1.15,children:(tab==0?['SE','HR','GB','DE','US','IT','FR','']:['',...codes]).map((c)=>InkWell(borderRadius:BorderRadius.circular(14),onTap:()=>chooseCountry(c),child:Container(decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(14),border:Border.all(color:country==c?cyan:Colors.transparent)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Text(flag(c),style:const TextStyle(fontSize:26)),Text(c.isEmpty?tr('World','Världen','Svijet'):({'SE':tr('Sweden','Sverige','Švedska'),'HR':tr('Croatia','Kroatien','Hrvatska'),'GB':'UK','DE':tr('Germany','Tyskland','Njemačka'),'US':'USA','IT':tr('Italy','Italien','Italija'),'FR':tr('France','Frankrike','Francuska')}[c]??c),style:const TextStyle(fontSize:11),maxLines:1,overflow:TextOverflow.ellipsis)])))).toList()),
+            const SizedBox(height:8),
+            Row(children:[
+              const Icon(Icons.public,color:Colors.white60,size:18),
+              const SizedBox(width:8),
+              Expanded(child:DropdownButtonHideUnderline(child:DropdownButton<String>(
+                value:country,isExpanded:true,
+                items:['',...codes].map((code)=>DropdownMenuItem(value:code,child:Text(code.isEmpty?tr('All countries','Alla länder','Sve države'):'${flag(code)}  ${countryName(code)}',overflow:TextOverflow.ellipsis))).toList(),
+                onChanged:(value){if(value!=null&&value!=country)chooseCountry(value);},
+              ))),
+            ]),
           ]))),
-          SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,10),child:Text(tab==2?tr('Favorites','Favoriter','Omiljene'):tab==3?tr('Recently played','Senast spelade','Nedavno slušano'):tr('Popular stations','Populära stationer','Popularne stanice'),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)))),
-          if(loading&&tab<2)const SliverToBoxAdapter(child:LinearProgressIndicator()),
+          SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,10),child:Text(tab==1?tr('Favorites','Favoriter','Omiljene'):tab==2?tr('Recently played','Senast spelade','Nedavno slušano'):(query.text.trim().isEmpty&&country.isEmpty?tr('Popular stations','Populära stationer','Popularne stanice'):tr('Radio stations','Radiostationer','Radio stanice')),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)))),
+          if(loading&&tab==0)const SliverToBoxAdapter(child:LinearProgressIndicator()),
           if(error.isNotEmpty)SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.all(16),child:Text(error))),
           SliverList(delegate:SliverChildBuilderDelegate((context,i){final s=list[i];final liked=favorites.any((x)=>x.id==s.id);return Padding(padding:const EdgeInsets.symmetric(horizontal:8,vertical:3),child:ListTile(leading:artwork(s),title:Text(s.name,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text(s.country,maxLines:1),onTap:()=>openPlayer(s),trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(liked?Icons.favorite:Icons.favorite_border,color:liked?cyan:Colors.white60),onPressed:(){setState((){if(liked){favorites.removeWhere((x)=>x.id==s.id);}else{favorites.add(s);}});save();}),IconButton(onPressed:()=>openPlayer(s),icon:const Icon(Icons.play_circle_outline,size:30))])));},childCount:list.length))
         ])),
@@ -260,7 +280,7 @@ class _RadioHomeState extends State<RadioHome> {
           Row(children:[InkWell(onTap:()=>openPlayer(),child:artwork(current!,size:48)),const SizedBox(width:10),Expanded(child:InkWell(onTap:()=>openPlayer(),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(current!.name,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.bold)),StreamBuilder<String?>(stream:radio.nowPlaying,initialData:radio.nowPlaying.value,builder:(context,snapshot)=>Text(snapshot.data??current!.country,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:Colors.white60,fontSize:12)))]))),IconButton(onPressed:()=>skip(-1),icon:const Icon(Icons.skip_previous)),StreamBuilder<PlaybackState>(stream:radio.playbackState,initialData:radio.playbackState.value,builder:(context,snapshot)=>IconButton(icon:Icon(snapshot.data?.playing==true?Icons.pause_circle_filled:Icons.play_circle_filled,color:cyan,size:36),onPressed:(){if(radio.playbackState.value.playing){radio.pause();}else{radio.play();}})),IconButton(onPressed:()=>skip(1),icon:const Icon(Icons.skip_next))])
         ]))
       ])),
-      bottomNavigationBar:NavigationBar(backgroundColor:panel,indicatorColor:const Color(0xff29475a),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:const Icon(Icons.home_outlined),label:tr('Home','Hem','Početna')),NavigationDestination(icon:const Icon(Icons.public),label:tr('Explore','Utforska','Istraži')),NavigationDestination(icon:const Icon(Icons.favorite_border),label:tr('Favorites','Favoriter','Omiljene')),NavigationDestination(icon:const Icon(Icons.history),label:tr('Recent','Senaste','Nedavno'))])
+      bottomNavigationBar:NavigationBar(backgroundColor:panel,indicatorColor:const Color(0xff29475a),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:const Icon(Icons.home_outlined),label:tr('Home','Hem','Početna')),NavigationDestination(icon:const Icon(Icons.favorite_border),label:tr('Favorites','Favoriter','Omiljene')),NavigationDestination(icon:const Icon(Icons.history),label:tr('Recent','Senaste','Nedavno'))])
     ));
   }
 }
