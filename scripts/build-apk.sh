@@ -31,6 +31,7 @@ gradle=gradle.replace('buildTypes {','''signingConfigs {
         create("waveRelease") {
             storeFile = file(System.getenv("WAVEDRIVE_KEYSTORE") ?: error("WAVEDRIVE_KEYSTORE missing"))
             storePassword = System.getenv("WAVEDRIVE_KEYSTORE_PASSWORD") ?: error("Signing password missing")
+            storeType = "PKCS12"
             keyAlias = "wavedrive"
             keyPassword = storePassword
         }
