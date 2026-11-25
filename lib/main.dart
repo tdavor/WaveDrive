@@ -10,14 +10,41 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.3';
+const appVersion='1.0.4';
+const brandLogo='assets/branding/wavedrive.webp';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.media',androidNotificationChannelName:'WaveDrive media playback',androidNotificationIcon:'drawable/ic_wavedrive_notification',androidNotificationClickStartsActivity:true,androidNotificationOngoing:false,androidStopForegroundOnPause:false));
   final session=await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());
-  runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:RadioHome()));
+  runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:WaveSplash()));
+}
+class WaveSplash extends StatefulWidget {
+  const WaveSplash({super.key});
+  @override State<WaveSplash> createState()=>_WaveSplashState();
+}
+class _WaveSplashState extends State<WaveSplash> {
+  Timer? _timer;
+  @override void initState(){
+    super.initState();
+    _timer=Timer(const Duration(milliseconds:1400),(){
+      if(!mounted)return;
+      Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+        pageBuilder:(_,__,___)=>const RadioHome(),
+        transitionDuration:const Duration(milliseconds:200),
+        transitionsBuilder:(_,animation,__,child)=>FadeTransition(opacity:animation,child:child),
+      ));
+    });
+  }
+  @override void dispose(){_timer?.cancel();super.dispose();}
+  @override Widget build(BuildContext context)=>const AnnotatedRegion<SystemUiOverlayStyle>(
+    value:SystemUiOverlayStyle(statusBarColor:Colors.black,systemNavigationBarColor:Colors.black,statusBarIconBrightness:Brightness.light,systemNavigationBarIconBrightness:Brightness.light),
+    child:Scaffold(
+      backgroundColor:Colors.black,
+      body:SizedBox.expand(child:Image(image:AssetImage(brandLogo),fit:BoxFit.contain)),
+    ),
+  );
 }
 class RadioHome extends StatefulWidget {
   const RadioHome({super.key});
@@ -161,7 +188,7 @@ class _RadioHomeState extends State<RadioHome> {
     showDialog<void>(context:context,builder:(_)=>Theme(data:radioTheme,child:AlertDialog(
       title:Text(tr('About WaveDrive','Om WaveDrive','O WaveDriveu')),
       content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Icon(Icons.graphic_eq,color:cyan,size:48),SizedBox(height:16),
+        ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.asset(brandLogo,width:96,height:96,fit:BoxFit.contain)),const SizedBox(height:16),
         Text('WaveDrive',style:TextStyle(fontSize:24,fontWeight:FontWeight.bold)),
         Text('Your road. Your radio.'),SizedBox(height:16),
         Text(tr('Version','Version','Verzija')+': '+appVersion),const SizedBox(height:8),Text(tr('Author','Författare','Autor')+': t.davor@gmail.com')
@@ -211,7 +238,7 @@ class _RadioHomeState extends State<RadioHome> {
     final list=tab==2?favorites:tab==3?recent:stations;
     final theme=radioTheme;
     return Theme(data:theme,child:Scaffold(
-      appBar:AppBar(backgroundColor:const Color(0xff101520),title:const Row(children:[Icon(Icons.graphic_eq,color:cyan,size:30),SizedBox(width:8),Text('Wave',style:TextStyle(fontWeight:FontWeight.w800)),Text('Drive',style:TextStyle(color:cyan,fontWeight:FontWeight.w800))]),actions:[PopupMenuButton<String>(icon:const Icon(Icons.settings_outlined),onSelected:(v){if(v=='about'){showAbout();return;}setState(()=>lang=v);save();},itemBuilder:(_)=>[const PopupMenuItem(value:'en',child:Text('English')),const PopupMenuItem(value:'sv',child:Text('Svenska')),const PopupMenuItem(value:'hr',child:Text('Hrvatski')),PopupMenuItem(value:'about',child:Text(tr('About','Om','O aplikaciji')))])]),
+      appBar:AppBar(backgroundColor:const Color(0xff101520),title:Row(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.asset(brandLogo,width:38,height:38,fit:BoxFit.contain)),const SizedBox(width:8),const Text('Wave',style:TextStyle(fontWeight:FontWeight.w800)),const Text('Drive',style:TextStyle(color:cyan,fontWeight:FontWeight.w800))]),actions:[PopupMenuButton<String>(icon:const Icon(Icons.settings_outlined),onSelected:(v){if(v=='about'){showAbout();return;}setState(()=>lang=v);save();},itemBuilder:(_)=>[const PopupMenuItem(value:'en',child:Text('English')),const PopupMenuItem(value:'sv',child:Text('Svenska')),const PopupMenuItem(value:'hr',child:Text('Hrvatski')),PopupMenuItem(value:'about',child:Text(tr('About','Om','O aplikaciji')))])]),
       body:SafeArea(child:Column(children:[
         Expanded(child:CustomScrollView(slivers:[
           if(tab<2) SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,4,16,12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
