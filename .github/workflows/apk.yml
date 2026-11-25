@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  contents: write
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -23,3 +23,13 @@ jobs:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
+      - name: Publish v1.0.0-alpha.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.0.0-alpha.1 >/dev/null 2>&1; then
+            echo "Release already exists"
+          else
+            cp build/app/outputs/flutter-apk/app-debug.apk WaveDrive-v1.0.0-alpha.1.apk
+            gh release create v1.0.0-alpha.1 WaveDrive-v1.0.0-alpha.1.apk --target "$GITHUB_SHA" --title "WaveDrive v1.0.0-alpha.1" --prerelease --notes "Initial Android test APK. Background playback requires device testing. Android Auto browsing and CarPlay are not complete. No AAB."
+          fi
