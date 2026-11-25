@@ -9,7 +9,7 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.0-alpha.6';
+const appVersion='1.0.1';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
