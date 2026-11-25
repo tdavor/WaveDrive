@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'radio_handler.dart';
 import 'update_service.dart';
 import 'package:audio_service/audio_service.dart';
@@ -12,7 +13,8 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.5';
+const appVersion='1.0.6';
+const donationUrl='https://buymeacoffee.com/wjkrddbhyx';
 const brandLogo='assets/branding/wavedrive.webp';
 
 Future<Uri?> prepareBrandArtwork() async {
@@ -73,13 +75,15 @@ class _RadioHomeState extends State<RadioHome> {
   StreamSubscription<MediaItem?>? mediaSub;
   StreamSubscription<int>? historySub;
   @override void initState(){super.initState();init();mediaSub=radio.mediaItem.listen((m){if(m!=null&&mounted){setState(()=>current=radio.station(m));}});historySub=radio.historyChanged.listen((_) {radio.stored('recent').then((v){if(mounted)setState(()=>recent=v);});});}
+  bool autoResume=false;
   bool checkingUpdate=false;
   final updater=UpdateService();
   Future<void> init() async {
     final p=await SharedPreferences.getInstance();
     List<Station> read(String key)=>(jsonDecode(p.getString(key)??'[]') as List).map((j)=>Station.fromJson(Map<String,dynamic>.from(j))).toList();
     if(!mounted)return;
-    setState((){favorites=read('favorites');recent=read('recent');lang=p.getString('language')??'en';});
+    setState((){favorites=read('favorites');recent=read('recent');lang=p.getString('language')??'en';autoResume=p.getBool('auto_resume')??false;});
+    if(autoResume&&recent.isNotEmpty&&radio.current==null){unawaited(radio.select(recent.first,List<Station>.of(recent)));}
     unawaited(startupChecks());
     await search();
   }
@@ -209,6 +213,71 @@ class _RadioHomeState extends State<RadioHome> {
       if(mounted&&manual)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr('Update check failed','Uppdateringskontrollen misslyckades','Provjera nadogradnje nije uspjela'))));
     }finally{checkingUpdate=false;}
   }
+  Future<void> showSettings() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(routeContext)=>Theme(data:radioTheme,child:StatefulBuilder(builder:(ctx,refresh){
+      return Scaffold(
+        appBar:AppBar(title:Text(tr('Settings','Inställningar','Postavke'))),
+        body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
+          Text(tr('Playback','Uppspelning','Reprodukcija'),style:const TextStyle(color:cyan,fontWeight:FontWeight.bold)),
+          StreamBuilder<DateTime?>(stream:radio.sleepDeadline,initialData:radio.sleepDeadline.value,builder:(context,snapshot){
+            final deadline=snapshot.data;
+            return ListTile(
+              leading:const Icon(Icons.bedtime_outlined,color:cyan),
+              title:Text(tr('Sleep timer','Insomningstimer','Timer za spavanje')),
+              subtitle:deadline==null?Text(tr('Off','Av','Isključeno')):StreamBuilder<int>(
+                stream:Stream.periodic(const Duration(seconds:1),(i)=>i),
+                builder:(context,_) {
+                  final seconds=deadline.difference(DateTime.now()).inSeconds.clamp(0,86400).toInt();
+                  final min=seconds~/60;final sec=seconds%60;
+                  return Text('$min:${sec.toString().padLeft(2,'0')}');
+                }),
+              trailing:const Icon(Icons.chevron_right),
+              onTap:() async {
+                final selected=await showDialog<int>(context:ctx,builder:(dialogContext)=>Theme(data:radioTheme,child:SimpleDialog(
+                  title:Text(tr('Stop radio after','Stoppa radion efter','Zaustavi radio nakon')),
+                  children:[for(final minutes in [15,30,60,90])SimpleDialogOption(onPressed:()=>Navigator.pop(dialogContext,minutes),child:Text('$minutes min')),
+                    SimpleDialogOption(onPressed:()=>Navigator.pop(dialogContext,0),child:Text(tr('Turn off timer','Stäng av timer','Isključi timer')))]
+                )));
+                if(selected!=null)radio.setSleepTimer(selected==0?null:Duration(minutes:selected));
+              },
+            );
+          }),
+          SwitchListTile(
+            secondary:const Icon(Icons.play_circle_outline,color:cyan),
+            title:Text(tr('Auto resume','Automatisk återupptagning','Automatski nastavak')),
+            subtitle:Text(tr('Play the last station when WaveDrive starts','Spela senaste stationen när WaveDrive startar','Pokreni posljednju stanicu pri otvaranju WaveDrivea')),
+            value:autoResume,
+            onChanged:(value) async {
+              if(!mounted)return;
+              setState(()=>autoResume=value);refresh((){});
+              final prefs=await SharedPreferences.getInstance();await prefs.setBool('auto_resume',value);
+            },
+          ),
+          const Divider(),
+          Text(tr('General','Allmänt','Općenito'),style:const TextStyle(color:cyan,fontWeight:FontWeight.bold)),
+          ListTile(leading:const Icon(Icons.language,color:cyan),title:Text(tr('Language','Språk','Jezik')),trailing:DropdownButton<String>(
+            value:lang,items:const [DropdownMenuItem(value:'en',child:Text('English')),DropdownMenuItem(value:'sv',child:Text('Svenska')),DropdownMenuItem(value:'hr',child:Text('Hrvatski'))],
+            onChanged:(value){if(value==null||!mounted)return;setState(()=>lang=value);refresh((){});unawaited(save());},
+          )),
+          ListTile(leading:const Icon(Icons.battery_charging_full,color:cyan),title:Text(tr('Battery settings','Batteriinställningar','Postavke baterije')),onTap:(){Navigator.pop(routeContext);unawaited(batterySetup(manual:true));}),
+          ListTile(leading:const Icon(Icons.system_update,color:cyan),title:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje')),onTap:(){Navigator.pop(routeContext);unawaited(checkUpdate(manual:true));}),
+          const Divider(),
+          Text(tr('Support','Stöd','Podrška'),style:const TextStyle(color:cyan,fontWeight:FontWeight.bold)),
+          ListTile(
+            leading:const Icon(Icons.coffee_outlined,color:cyan),
+            title:const Text('Buy Me a Coffee'),
+            subtitle:Text(tr('Support WaveDrive voluntarily','Stöd WaveDrive frivilligt','Dobrovoljno podrži WaveDrive')),
+            trailing:const Icon(Icons.open_in_new),
+            onTap:() async {
+              try{if(await launchUrl(Uri.parse(donationUrl),mode:LaunchMode.externalApplication))return;}catch(_){}
+              if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(tr('Could not open link','Kunde inte öppna länken','Poveznica se ne može otvoriti'))));
+            },
+          ),
+          ListTile(leading:const Icon(Icons.info_outline,color:cyan),title:Text(tr('About','Om','O aplikaciji')),onTap:(){Navigator.pop(routeContext);showAbout();})
+        ])),
+      );
+    }))));
+  }
   void showAbout(){
     showDialog<void>(context:context,builder:(_)=>Theme(data:radioTheme,child:AlertDialog(
       title:Text(tr('About WaveDrive','Om WaveDrive','O WaveDriveu')),
@@ -263,7 +332,7 @@ class _RadioHomeState extends State<RadioHome> {
     final list=tab==1?favorites:tab==2?recent:stations;
     final theme=radioTheme;
     return Theme(data:theme,child:Scaffold(
-      appBar:AppBar(backgroundColor:const Color(0xff101520),title:Row(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.asset(brandLogo,width:38,height:38,fit:BoxFit.contain)),const SizedBox(width:8),const Text('Wave',style:TextStyle(fontWeight:FontWeight.w800)),const Text('Drive',style:TextStyle(color:cyan,fontWeight:FontWeight.w800))]),actions:[PopupMenuButton<String>(icon:const Icon(Icons.settings_outlined),onSelected:(v){if(v=='about'){showAbout();return;}setState(()=>lang=v);save();},itemBuilder:(_)=>[const PopupMenuItem(value:'en',child:Text('English')),const PopupMenuItem(value:'sv',child:Text('Svenska')),const PopupMenuItem(value:'hr',child:Text('Hrvatski')),PopupMenuItem(value:'about',child:Text(tr('About','Om','O aplikaciji')))])]),
+      appBar:AppBar(backgroundColor:const Color(0xff101520),title:Row(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.asset(brandLogo,width:38,height:38,fit:BoxFit.contain)),const SizedBox(width:8),const Text('Wave',style:TextStyle(fontWeight:FontWeight.w800)),const Text('Drive',style:TextStyle(color:cyan,fontWeight:FontWeight.w800))]),actions:[IconButton(icon:const Icon(Icons.settings_outlined),tooltip:tr('Settings','Inställningar','Postavke'),onPressed:showSettings)]),
       body:SafeArea(child:Column(children:[
         Expanded(child:CustomScrollView(slivers:[
           if(tab==0) SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,4,16,12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
