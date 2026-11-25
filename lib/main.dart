@@ -84,24 +84,25 @@ class _RadioHomeState extends State<RadioHome> {
       final ready=ValueNotifier<bool>(false);
       final message=ValueNotifier<String>(tr('Downloading update…','Hämtar uppdatering…','Preuzimanje nadogradnje…'));
       var installing=false;
-      final download=updater.download(update).then((_) {
+      Future<void> install() async {
+        if(installing)return;
+        installing=true;
+        try{
+          final result=await updater.install();
+          if(result=='permission')message.value=tr('Allow installation from WaveDrive, then return and tap Install.','Tillåt installation från WaveDrive, gå tillbaka och tryck Installera.','Dopustite instaliranje iz WaveDrivea, vratite se i pritisnite Instaliraj.');
+        }catch(e){message.value=tr('Installation failed: ','Installation misslyckades: ','Instalacija nije uspjela: ')+e.toString();}
+        finally{installing=false;}
+      }
+      final completed=ValueNotifier<bool>(false);
+      final download=updater.download(update).then((_) async {
         ready.value=true;
         message.value=tr('Update downloaded. Android will ask for installation approval.','Uppdateringen är hämtad. Android ber om installationsgodkännande.','Nadogradnja je preuzeta. Android će zatražiti potvrdu instalacije.');
+        if(mounted)await install();
       }).catchError((Object e){
         message.value=tr('Update download failed: ','Hämtning misslyckades: ','Preuzimanje nije uspjelo: ')+e.toString();
       });
-      final completed=ValueNotifier<bool>(false);
       unawaited(download.whenComplete(()=>completed.value=true));
       await showDialog<void>(context:context,barrierDismissible:false,builder:(dialogContext){
-        Future<void> install() async {
-          if(installing)return;
-          installing=true;
-          try{
-            final result=await updater.install();
-            if(result=='permission')message.value=tr('Allow installation from WaveDrive, then return and tap Install.','Tillåt installation från WaveDrive, gå tillbaka och tryck Installera.','Dopustite instaliranje iz WaveDrivea, vratite se i pritisnite Instaliraj.');
-          }catch(e){message.value=tr('Installation failed: ','Installation misslyckades: ','Instalacija nije uspjela: ')+e.toString();}
-          finally{installing=false;}
-        }
         return Theme(data:radioTheme,child:ValueListenableBuilder<bool>(valueListenable:completed,builder:(_,done,__)=>PopScope(canPop:done,child:AlertDialog(
           title:Text(tr('New version','Ny version','Nova verzija')+' '+update.version),
           content:Column(mainAxisSize:MainAxisSize.min,children:[
@@ -116,7 +117,7 @@ class _RadioHomeState extends State<RadioHome> {
         ))));
       });
       await download;
-      ready.dispose();message.dispose();completed.dispose();
+      // Dialog values are collected after the route transition and installer callbacks.
     }catch(e){
       if(mounted&&manual)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr('Update check failed','Uppdateringskontrollen misslyckades','Provjera nadogradnje nije uspjela'))));
     }finally{checkingUpdate=false;}
