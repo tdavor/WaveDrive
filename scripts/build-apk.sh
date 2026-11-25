@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-flutter create --platforms=android,ios --org com.wavedrive --project-name wavedrive --no-pub .
+flutter create --platforms=android --org com.wavedrive --project-name wavedrive --no-pub .
 python3 - <<'PY'
 from pathlib import Path
 p=Path('android/app/src/main/AndroidManifest.xml')
@@ -12,7 +12,11 @@ s=s.replace('</application>','''<service android:name="com.ryanheise.audioservic
 <intent-filter><action android:name="android.intent.action.MEDIA_BUTTON"/></intent-filter>
 </receiver>
 </application>''')
+s=s.replace('</application>','<meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc"/></application>')
 p.write_text(s)
+x=Path('android/app/src/main/res/xml/automotive_app_desc.xml')
+x.parent.mkdir(parents=True,exist_ok=True)
+x.write_text('<automotiveApp><uses name="media"/></automotiveApp>')
 PY
 flutter pub get
 flutter analyze --no-fatal-infos --no-fatal-warnings lib
