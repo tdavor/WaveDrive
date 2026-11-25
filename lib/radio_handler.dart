@@ -18,6 +18,7 @@ class RadioHandler extends BaseAudioHandler {
   int _generation=0;
   bool _wanted=false, _opening=false, _recovering=false;
   int _attempt=0;
+  String? _failure;
   Timer? _retry, _stall, _stable;
   static const _maxRetries=6;
   bool _valid(int generation)=>generation==_generation&&_wanted;
@@ -26,7 +27,7 @@ class RadioHandler extends BaseAudioHandler {
     if(!_valid(generation)||_opening||_retry!=null)return;
     _stall?.cancel();_stall=null;_stable?.cancel();_stable=null;
     if(_attempt>=_maxRetries){
-      _wanted=false;_recovering=false;
+      _wanted=false;_recovering=false;_failure='Stream unavailable: '+reason;
       unawaited(player.stop().catchError((Object _){}));
       playbackState.add(playbackState.value.copyWith(processingState:AudioProcessingState.error,errorMessage:'Stream unavailable: '+reason,playing:false));
       return;
@@ -38,7 +39,7 @@ class RadioHandler extends BaseAudioHandler {
     _retry=Timer(Duration(seconds:delay),(){
       _retry=null;
       final s=current;
-      if(_valid(generation)&&s!=null)unawaited(_connect(s,generation,recovery:true));
+      if(_valid(generation)&&s!=null)unawaited(_connect(s,generation));
     });
   }
   void _observe(PlayerState state){
@@ -72,8 +73,10 @@ class RadioHandler extends BaseAudioHandler {
     playbackState.add(PlaybackState(
       controls:[MediaControl.skipToPrevious,(_recovering||player.playing)?MediaControl.pause:MediaControl.play,MediaControl.skipToNext,MediaControl.stop],
       androidCompactActionIndices:const [0,1,2],
-      processingState:_recovering?AudioProcessingState.buffering:const {ProcessingState.idle:AudioProcessingState.idle,ProcessingState.loading:AudioProcessingState.loading,ProcessingState.buffering:AudioProcessingState.buffering,ProcessingState.ready:AudioProcessingState.ready,ProcessingState.completed:AudioProcessingState.completed}[player.processingState]!,
-      playing:_recovering||player.playing,updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
+      systemActions:const {MediaAction.playFromMediaId,MediaAction.playFromSearch,MediaAction.playPause},
+      errorMessage:_failure,
+      processingState:_failure!=null?AudioProcessingState.error:_recovering?AudioProcessingState.buffering:const {ProcessingState.idle:AudioProcessingState.idle,ProcessingState.loading:AudioProcessingState.loading,ProcessingState.buffering:AudioProcessingState.buffering,ProcessingState.ready:AudioProcessingState.ready,ProcessingState.completed:AudioProcessingState.completed}[player.processingState]!,
+      playing:_failure==null&&(_recovering||player.playing),updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
   }
   MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:s.logo.startsWith('http')?Uri.tryParse(s.logo):null,extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
   Station station(MediaItem m)=>Station(m.id,m.extras?['stationName'] as String? ?? m.title,m.extras?['url'] as String? ?? '',m.extras?['country'] as String? ?? '',m.extras?['logo'] as String? ?? '');
@@ -109,7 +112,7 @@ class RadioHandler extends BaseAudioHandler {
   @override Future<void> playMediaItem(MediaItem mediaItem) async => select(station(mediaItem),[station(mediaItem)]);
   Future<void> select(Station s,List<Station> list) async {
     final generation=++_generation;
-    _cancelTimers();_wanted=true;_attempt=0;_recovering=false;_opening=true;
+    _cancelTimers();_wanted=true;_attempt=0;_failure=null;_recovering=false;_opening=true;
     _active=list.isEmpty?[s]:List.of(list);
     current=s;nowPlaying.add(null);mediaItem.add(item(s));
     await _connect(s,generation);
@@ -123,7 +126,7 @@ class RadioHandler extends BaseAudioHandler {
       historyChanged.add(historyChanged.value+1);
     }catch(e){print('WaveDrive: history update failed: $e');}
   }
-  Future<void> _connect(Station s,int generation,{bool recovery=false}) async {
+  Future<void> _connect(Station s,int generation) async {
     if(!_valid(generation))return;
     _opening=true;_recovering=true;_broadcast();
     try{
@@ -154,7 +157,7 @@ class RadioHandler extends BaseAudioHandler {
   @override Future<void> play() async {
     final s=current;if(s==null)return;
     if(_wanted&&(_opening||_recovering||player.playing))return;
-    _cancelTimers();_wanted=true;_attempt=0;
+    _cancelTimers();_wanted=true;_attempt=0;_failure=null;
     if(player.processingState==ProcessingState.idle||player.processingState==ProcessingState.completed){
       await _connect(s,++_generation);
     }else{
@@ -168,7 +171,7 @@ class RadioHandler extends BaseAudioHandler {
     _broadcast();
   }
   @override Future<void> stop() async {
-    ++_generation;_wanted=false;_opening=false;_recovering=false;_cancelTimers();
+    ++_generation;_wanted=false;_opening=false;_recovering=false;_failure=null;_cancelTimers();
     await _icySub?.cancel();_icySub=null;
     await player.stop();await super.stop();
   }
