@@ -13,7 +13,7 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.6';
+const appVersion='1.0.7';
 const donationUrl='https://buymeacoffee.com/wjkrddbhyx';
 const brandLogo='assets/branding/wavedrive.webp';
 
@@ -338,7 +338,7 @@ class _RadioHomeState extends State<RadioHome> {
           if(tab==0) SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,4,16,12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             const Text('Your road. Your radio.',style:TextStyle(color:Colors.white70)),
             const SizedBox(height:18),
-            TextField(controller:query,onSubmitted:(_)=>search(),decoration:InputDecoration(filled:true,fillColor:panel,prefixIcon:const Icon(Icons.search),hintText:tr('Search radio stations...','Sök radiostationer...','Traži radio stanice...'),suffixIcon:IconButton(onPressed:search,icon:const Icon(Icons.arrow_forward)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:BorderSide.none))),
+            TextField(controller:query,textInputAction:TextInputAction.search,onSubmitted:(_)=>search(),decoration:InputDecoration(filled:true,fillColor:panel,prefixIcon:const Icon(Icons.search),hintText:tr('Search radio stations...','Sök radiostationer...','Traži radio stanice...'),suffixIcon:IconButton(onPressed:search,icon:const Icon(Icons.arrow_forward)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:BorderSide.none))),
             const SizedBox(height:8),
             Row(children:[
               const Icon(Icons.public,color:Colors.white60,size:18),
@@ -352,6 +352,7 @@ class _RadioHomeState extends State<RadioHome> {
           ]))),
           SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,10),child:Text(tab==1?tr('Favorites','Favoriter','Omiljene'):tab==2?tr('Recently played','Senast spelade','Nedavno slušano'):(query.text.trim().isEmpty&&country.isEmpty?tr('Popular stations','Populära stationer','Popularne stanice'):tr('Radio stations','Radiostationer','Radio stanice')),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)))),
           if(loading&&tab==0)const SliverToBoxAdapter(child:LinearProgressIndicator()),
+          if(tab==0&&!loading&&error.isEmpty&&stations.isEmpty)SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.all(16),child:Text(tr('No stations found','Inga stationer hittades','Nema pronađenih stanica')))),
           if(error.isNotEmpty)SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.all(16),child:Text(error))),
           SliverList(delegate:SliverChildBuilderDelegate((context,i){final s=list[i];final liked=favorites.any((x)=>x.id==s.id);return Padding(padding:const EdgeInsets.symmetric(horizontal:8,vertical:3),child:ListTile(leading:artwork(s),title:Text(s.name,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text(s.country,maxLines:1),onTap:()=>openPlayer(s),trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(liked?Icons.favorite:Icons.favorite_border,color:liked?cyan:Colors.white60),onPressed:(){setState((){if(liked){favorites.removeWhere((x)=>x.id==s.id);}else{favorites.add(s);}});save();}),IconButton(onPressed:()=>openPlayer(s),icon:const Icon(Icons.play_circle_outline,size:30))])));},childCount:list.length))
         ])),
