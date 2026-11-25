@@ -1,7 +1,7 @@
 name: wavedrive
 description: Your road. Your radio.
 publish_to: none
-version: 1.0.3+9
+version: 1.0.4+10
 environment:
   sdk: '>=3.4.0 <4.0.0'
 dependencies:
@@ -15,3 +15,5 @@ dependencies:
   audio_session: ^0.1.25
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/wavedrive.webp

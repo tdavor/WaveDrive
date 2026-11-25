@@ -44,6 +44,7 @@ gradle=gradle.replace('buildTypes {','''signingConfigs {
     buildTypes {''',1).replace(debug,'signingConfig = signingConfigs.getByName("waveRelease")')
 g.write_text(gradle)
 PY
+python3 scripts/generate_branding.py
 flutter pub get
 # just_audio 0.9.x does not expose ExoPlayer's network wake mode in Dart.
 # Enable it on the resolved Android player; ExoPlayer releases both locks on pause/stop.
