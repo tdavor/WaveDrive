@@ -63,6 +63,17 @@ class RadioHandler extends BaseAudioHandler {
   }
   StreamSubscription<IcyMetadata?>? _icySub;
   final nowPlaying=BehaviorSubject<String?>.seeded(null);
+  final sleepDeadline=BehaviorSubject<DateTime?>.seeded(null);
+  Timer? _sleepTimer;
+  void setSleepTimer(Duration? duration){
+    _sleepTimer?.cancel();_sleepTimer=null;
+    if(duration==null||duration<=Duration.zero){sleepDeadline.add(null);return;}
+    sleepDeadline.add(DateTime.now().add(duration));
+    _sleepTimer=Timer(duration,(){
+      setSleepTimer(null);
+      unawaited(stop());
+    });
+  }
   final historyChanged=BehaviorSubject<int>.seeded(0);
   final Uri? fallbackArt;
   RadioHandler({this.fallbackArt}){
@@ -182,6 +193,7 @@ class RadioHandler extends BaseAudioHandler {
     _broadcast();
   }
   @override Future<void> stop() async {
+    setSleepTimer(null);
     ++_generation;_wanted=false;_opening=false;_recovering=false;_failure=null;_cancelTimers();
     await _icySub?.cancel();_icySub=null;
     await player.stop();await super.stop();
