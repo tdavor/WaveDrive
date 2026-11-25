@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'radio_handler.dart';
 import 'update_service.dart';
 import 'package:audio_service/audio_service.dart';
@@ -13,9 +15,19 @@ late RadioHandler radio;
 const appVersion='1.0.5';
 const brandLogo='assets/branding/wavedrive.webp';
 
+Future<Uri?> prepareBrandArtwork() async {
+  try{
+    final dir=await getApplicationSupportDirectory();
+    final file=File('${dir.path}/wavedrive_brand.webp');
+    final data=await rootBundle.load(brandLogo);
+    await file.writeAsBytes(data.buffer.asUint8List(data.offsetInBytes,data.lengthInBytes),flush:true);
+    return file.uri;
+  }catch(e){debugPrint('WaveDrive artwork: $e');return null;}
+}
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.media',androidNotificationChannelName:'WaveDrive media playback',androidNotificationIcon:'drawable/ic_wavedrive_notification',androidNotificationClickStartsActivity:true,androidNotificationOngoing:false,androidStopForegroundOnPause:false));
+  final fallbackArt=await prepareBrandArtwork();
+  radio=await AudioService.init(builder:()=>RadioHandler(fallbackArt:fallbackArt),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.media',androidNotificationChannelName:'WaveDrive media playback',androidNotificationIcon:'drawable/ic_wavedrive_notification',androidNotificationClickStartsActivity:true,androidNotificationOngoing:false,androidStopForegroundOnPause:false));
   final session=await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());
   runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:WaveSplash()));
