@@ -16,6 +16,9 @@ class RadioHandler extends BaseAudioHandler {
   List<Station> _active=[];
   Station? current;
   int _generation=0;
+  StreamSubscription<IcyMetadata?>? _icySub;
+  final nowPlaying=BehaviorSubject<String?>.seeded(null);
+  final historyChanged=BehaviorSubject<int>.seeded(0);
   RadioHandler(){
     player.playbackEventStream.listen((_)=>_broadcast(),onError:(Object e,StackTrace st){
       playbackState.add(playbackState.value.copyWith(processingState:AudioProcessingState.error,errorMessage:e.toString(),playing:false));
@@ -28,8 +31,8 @@ class RadioHandler extends BaseAudioHandler {
       processingState:const {ProcessingState.idle:AudioProcessingState.idle,ProcessingState.loading:AudioProcessingState.loading,ProcessingState.buffering:AudioProcessingState.buffering,ProcessingState.ready:AudioProcessingState.ready,ProcessingState.completed:AudioProcessingState.completed}[player.processingState]!,
       playing:player.playing,updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
   }
-  MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:s.logo.startsWith('http')?Uri.tryParse(s.logo):null,extras:{'url':s.url,'country':s.country,'logo':s.logo});
-  Station station(MediaItem m)=>Station(m.id,m.title,m.extras?['url'] as String? ?? '',m.extras?['country'] as String? ?? '',m.extras?['logo'] as String? ?? '');
+  MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:s.logo.startsWith('http')?Uri.tryParse(s.logo):null,extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
+  Station station(MediaItem m)=>Station(m.id,m.extras?['stationName'] as String? ?? m.title,m.extras?['url'] as String? ?? '',m.extras?['country'] as String? ?? '',m.extras?['logo'] as String? ?? '');
   Future<List<Station>> stored(String key) async {
     final p=await SharedPreferences.getInstance();await p.reload();
     return (jsonDecode(p.getString(key)??'[]') as List).map((j)=>Station.fromJson(Map<String,dynamic>.from(j))).toList();
@@ -63,14 +66,26 @@ class RadioHandler extends BaseAudioHandler {
   Future<void> select(Station s,List<Station> list) async {
     final generation=++_generation;
     _active=list.isEmpty?[s]:List.of(list);
-    current=s;mediaItem.add(item(s));
+    await _icySub?.cancel();
+    if(generation!=_generation)return;
+    current=s;nowPlaying.add(null);mediaItem.add(item(s));
     try{
       await player.setUrl(s.url);
       if(generation!=_generation)return;
+      _icySub=player.icyMetadataStream.listen((metadata){
+        if(generation!=_generation)return;
+        final raw=metadata?.info?.title?.trim();
+        final title=raw==null||raw.isEmpty?null:raw;
+        if(nowPlaying.value==title)return;
+        nowPlaying.add(title);
+        final base=item(s);
+        mediaItem.add(title==null?base:base.copyWith(title:title,artist:s.name,album:s.country));
+      });
       final p=await SharedPreferences.getInstance();
       final recent=[s,...(await stored('recent')).where((x)=>x.id!=s.id)].take(50);
       await p.setString('recent',jsonEncode(recent.map((x)=>x.toJson()).toList()));
       refreshChildren('recent');
+      historyChanged.add(historyChanged.value+1);
       unawaited(player.play().catchError((Object e){if(generation==_generation)playbackState.add(playbackState.value.copyWith(processingState:AudioProcessingState.error,errorMessage:e.toString(),playing:false));}));
     }catch(e){if(generation==_generation){playbackState.add(playbackState.value.copyWith(processingState:AudioProcessingState.error,errorMessage:e.toString(),playing:false));rethrow;}}
   }
