@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:rxdart/rxdart.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'radio_api.dart';
 
 class RadioHandler extends BaseAudioHandler {
+  final _children=<String,BehaviorSubject<Map<String,dynamic>>>{};
+  BehaviorSubject<Map<String,dynamic>> _subject(String id)=>_children.putIfAbsent(id,()=>BehaviorSubject.seeded(<String,dynamic>{}));
+  @override ValueStream<Map<String,dynamic>> subscribeToChildren(String parentMediaId)=>_subject(parentMediaId);
+  void refreshChildren(String id)=>_subject(id).add(<String,dynamic>{});
   final player=AudioPlayer();
   final api=RadioApi();
   List<Station> _active=[];
@@ -65,7 +70,7 @@ class RadioHandler extends BaseAudioHandler {
       final p=await SharedPreferences.getInstance();
       final recent=[s,...(await stored('recent')).where((x)=>x.id!=s.id)].take(50);
       await p.setString('recent',jsonEncode(recent.map((x)=>x.toJson()).toList()));
-      notifyChildrenChanged('recent');
+      refreshChildren('recent');
       unawaited(player.play().catchError((Object e){if(generation==_generation)playbackState.add(playbackState.value.copyWith(processingState:AudioProcessingState.error,errorMessage:e.toString(),playing:false));}));
     }catch(e){if(generation==_generation){playbackState.add(playbackState.value.copyWith(processingState:AudioProcessingState.error,errorMessage:e.toString(),playing:false));rethrow;}}
   }
