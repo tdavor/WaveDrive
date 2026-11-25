@@ -1,13 +1,14 @@
 name: wavedrive
 description: Your road. Your radio.
 publish_to: none
-version: 1.0.4+10
+version: 1.0.5+11
 environment:
   sdk: '>=3.4.0 <4.0.0'
 dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.2
+  path_provider: ^2.1.5
   rxdart: ^0.28.0
   audio_service: ^0.18.18
   just_audio: 0.9.46
