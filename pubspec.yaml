@@ -8,6 +8,8 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.2
+  just_audio_background: ^0.0.1-beta.15
+  audio_service: ^0.18.18
   just_audio: ^0.9.46
   shared_preferences: ^2.3.5
   audio_session: ^0.1.25
