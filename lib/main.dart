@@ -71,13 +71,13 @@ class _RadioHomeState extends State<RadioHome> {
   void showAbout(){
     showDialog<void>(context:context,builder:(_)=>Theme(data:radioTheme,child:AlertDialog(
       title:Text(tr('About WaveDrive','Om WaveDrive','O WaveDriveu')),
-      content:const Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+      content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
         Icon(Icons.graphic_eq,color:cyan,size:48),SizedBox(height:16),
         Text('WaveDrive',style:TextStyle(fontSize:24,fontWeight:FontWeight.bold)),
         Text('Your road. Your radio.'),SizedBox(height:16),
-        Text('Version: '+appVersion),SizedBox(height:8),Text('Author: t.davor@gmail.com')
+        Text(tr('Version','Version','Verzija')+': '+appVersion),const SizedBox(height:8),Text(tr('Author','Författare','Autor')+': t.davor@gmail.com')
       ]),
-      actions:[TextButton(onPressed:()=>Navigator.of(context).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
+      actions:[TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
     )));
   }
   void openPlayer([Station? selected]){
