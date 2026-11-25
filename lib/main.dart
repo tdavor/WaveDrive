@@ -12,7 +12,7 @@ const appVersion='1.0.0-alpha.5';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.playback',androidNotificationChannelName:'WaveDrive playback',androidNotificationOngoing:true,androidStopForegroundOnPause:false));
+  radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.playback',androidNotificationChannelName:'WaveDrive playback',androidNotificationOngoing:false,androidStopForegroundOnPause:false));
   final session=await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());
   runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:RadioHome()));
