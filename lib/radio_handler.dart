@@ -64,7 +64,8 @@ class RadioHandler extends BaseAudioHandler {
   StreamSubscription<IcyMetadata?>? _icySub;
   final nowPlaying=BehaviorSubject<String?>.seeded(null);
   final historyChanged=BehaviorSubject<int>.seeded(0);
-  RadioHandler(){
+  final Uri? fallbackArt;
+  RadioHandler({this.fallbackArt}){
     player.playbackEventStream.listen((_)=>_broadcast(),onError:(Object e,StackTrace st){
       if(!_opening)_scheduleRetry(_generation,e.toString());
     });
@@ -81,7 +82,11 @@ class RadioHandler extends BaseAudioHandler {
       processingState:processing,
       playing:active,updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
   }
-  MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:s.logo.startsWith('http')?Uri.tryParse(s.logo):null,extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
+  Uri? stationArt(Station s){
+    final uri=Uri.tryParse(s.logo.trim());
+    return uri!=null&&(uri.scheme=='http'||uri.scheme=='https')&&uri.host.isNotEmpty?uri:fallbackArt;
+  }
+  MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:stationArt(s),extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
   Station station(MediaItem m)=>Station(m.id,m.extras?['stationName'] as String? ?? m.title,m.extras?['url'] as String? ?? '',m.extras?['country'] as String? ?? '',m.extras?['logo'] as String? ?? '');
   Future<List<Station>> stored(String key) async {
     final p=await SharedPreferences.getInstance();await p.reload();
