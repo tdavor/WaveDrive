@@ -1,11 +1,17 @@
 import 'dart:convert';
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
-void main()=>runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:RadioHome()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await JustAudioBackground.init(androidNotificationChannelId:'com.wavedrive.radio.playback',androidNotificationChannelName:'WaveDrive playback',androidNotificationOngoing:true);
+  runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:RadioHome()));
+}
 class RadioHome extends StatefulWidget {
   const RadioHome({super.key});
   @override State<RadioHome> createState()=>_RadioHomeState();
@@ -44,7 +50,7 @@ class _RadioHomeState extends State<RadioHome> {
   Future<void> play(Station s) async {
     setState((){current=s;error='';});
     try {
-      await player.setUrl(s.url);
+      await player.setAudioSource(AudioSource.uri(Uri.parse(s.url),tag:MediaItem(id:s.id,title:s.name,album:s.country,artUri:Uri.tryParse(s.logo)?.hasScheme==true?Uri.tryParse(s.logo):null)));
       if(!mounted||current!=s)return;
       setState((){recent=[s,...recent.where((x)=>x.id!=s.id)].take(50).toList();});
       await save();
