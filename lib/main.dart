@@ -1,5 +1,7 @@
 import 'dart:convert';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'dart:async';
+import 'radio_handler.dart';
+late RadioHandler radio;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -9,7 +11,7 @@ import 'radio_api.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JustAudioBackground.init(androidNotificationChannelId:'com.wavedrive.radio.playback',androidNotificationChannelName:'WaveDrive playback',androidNotificationOngoing:true);
+  radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.playback',androidNotificationChannelName:'WaveDrive playback',androidNotificationOngoing:true));
   runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:RadioHome()));
 }
 class RadioHome extends StatefulWidget {
@@ -17,14 +19,15 @@ class RadioHome extends StatefulWidget {
   @override State<RadioHome> createState()=>_RadioHomeState();
 }
 class _RadioHomeState extends State<RadioHome> {
-  final api=RadioApi(), player=AudioPlayer(), query=TextEditingController();
+  final api=RadioApi(), player=radio.player, query=TextEditingController();
   List<Station> stations=[], favorites=[], recent=[];
   Station? current;
   String country='',lang='en',error='';
   int tab=0, request=0;
   bool loading=false;
   String tr(String en,String sv,String hr)=>lang=='sv'?sv:lang=='hr'?hr:en;
-  @override void initState(){super.initState();init();}
+  StreamSubscription<MediaItem?>? mediaSub;
+  @override void initState(){super.initState();init();mediaSub=radio.mediaItem.listen((m){if(m!=null&&mounted){setState(()=>current=radio.station(m));radio.stored('recent').then((v){if(mounted)setState(()=>recent=v);});}});}
   Future<void> init() async {
     final session=await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
@@ -37,7 +40,7 @@ class _RadioHomeState extends State<RadioHome> {
   Future<void> save() async {
     final p=await SharedPreferences.getInstance();
     await p.setString('favorites',jsonEncode(favorites.map((s)=>s.toJson()).toList()));
-    await p.setString('recent',jsonEncode(recent.map((s)=>s.toJson()).toList()));
+    radio.notifyChildrenChanged('favorites');
     await p.setString('language',lang);
   }
   Future<void> search() async {
@@ -50,14 +53,11 @@ class _RadioHomeState extends State<RadioHome> {
   Future<void> play(Station s) async {
     setState((){current=s;error='';});
     try {
-      await player.setAudioSource(AudioSource.uri(Uri.parse(s.url),tag:MediaItem(id:s.id,title:s.name,album:s.country,artUri:Uri.tryParse(s.logo)?.hasScheme==true?Uri.tryParse(s.logo):null)));
-      if(!mounted||current!=s)return;
-      setState((){recent=[s,...recent.where((x)=>x.id!=s.id)].take(50).toList();});
-      await save();
-      await player.play();
+      await radio.select(s,tab==2?favorites:tab==3?recent:stations);
+      final updated=await radio.stored('recent');if(mounted)setState(()=>recent=updated);
     }catch(_){if(mounted&&current==s)setState(()=>error=tr('Stream unavailable','Strömmen är otillgänglig','Stream nije dostupan'));}
   }
-  @override void dispose(){player.dispose();query.dispose();super.dispose();}
+  @override void dispose(){mediaSub?.cancel();query.dispose();super.dispose();}
   static const panel=Color(0xff202937), cyan=Color(0xff38bdf8);
   Widget artwork(Station s,{double size=52})=>ClipRRect(borderRadius:BorderRadius.circular(12),child:Container(width:size,height:size,color:panel,child:s.logo.startsWith('http')?Image.network(s.logo,fit:BoxFit.contain,errorBuilder:(_,__,___)=>const Icon(Icons.radio,color:cyan)):const Icon(Icons.radio,color:cyan)));
   String flag(String code)=>code.isEmpty?'🌍':String.fromCharCodes(code.codeUnits.map((c)=>c+127397));
@@ -87,7 +87,7 @@ class _RadioHomeState extends State<RadioHome> {
         if(current!=null) Container(margin:const EdgeInsets.fromLTRB(12,4,12,8),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:const Color(0xff26364a),borderRadius:BorderRadius.circular(18)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(tr('NOW PLAYING','SPELAS NU','TRENUTNO SVIRA'),style:const TextStyle(color:cyan,fontSize:10,letterSpacing:1.5)),
           const SizedBox(height:8),
-          Row(children:[artwork(current!,size:48),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(current!.name,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.bold)),Text(current!.country,style:const TextStyle(color:Colors.white60,fontSize:12))])),IconButton(onPressed:()=>skip(-1),icon:const Icon(Icons.skip_previous)),StreamBuilder<PlayerState>(stream:player.playerStateStream,builder:(context,snapshot)=>IconButton(icon:Icon(snapshot.data?.playing==true?Icons.pause_circle_filled:Icons.play_circle_filled,color:cyan,size:36),onPressed:(){if(player.playing){player.pause();}else{player.play();}})),IconButton(onPressed:()=>skip(1),icon:const Icon(Icons.skip_next))])
+          Row(children:[artwork(current!,size:48),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(current!.name,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.bold)),Text(current!.country,style:const TextStyle(color:Colors.white60,fontSize:12))])),IconButton(onPressed:()=>skip(-1),icon:const Icon(Icons.skip_previous)),StreamBuilder<PlayerState>(stream:player.playerStateStream,builder:(context,snapshot)=>IconButton(icon:Icon(snapshot.data?.playing==true?Icons.pause_circle_filled:Icons.play_circle_filled,color:cyan,size:36),onPressed:(){if(player.playing){radio.pause();}else{radio.play();}})),IconButton(onPressed:()=>skip(1),icon:const Icon(Icons.skip_next))])
         ]))
       ])),
       bottomNavigationBar:NavigationBar(backgroundColor:panel,indicatorColor:const Color(0xff29475a),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:const Icon(Icons.home_outlined),label:tr('Home','Hem','Početna')),NavigationDestination(icon:const Icon(Icons.public),label:tr('Explore','Utforska','Istraži')),NavigationDestination(icon:const Icon(Icons.favorite_border),label:tr('Favorites','Favoriter','Omiljene')),NavigationDestination(icon:const Icon(Icons.history),label:tr('Recent','Senaste','Nedavno'))])
