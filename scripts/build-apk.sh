@@ -16,4 +16,4 @@ p.write_text(s)
 PY
 flutter pub get
 flutter analyze --no-fatal-infos --no-fatal-warnings lib
-flutter build apk --debug
+flutter build apk --release --split-per-abi
