@@ -11,7 +11,7 @@ class RadioHandler extends BaseAudioHandler {
   BehaviorSubject<Map<String,dynamic>> _subject(String id)=>_children.putIfAbsent(id,()=>BehaviorSubject.seeded(<String,dynamic>{}));
   @override ValueStream<Map<String,dynamic>> subscribeToChildren(String parentMediaId)=>_subject(parentMediaId);
   void refreshChildren(String id)=>_subject(id).add(<String,dynamic>{});
-  final player=AudioPlayer();
+  final player=AudioPlayer(audioLoadConfiguration:const AudioLoadConfiguration(androidLoadControl:AndroidLoadControl(minBufferDuration:Duration(seconds:30),maxBufferDuration:Duration(seconds:60),bufferForPlaybackDuration:Duration(seconds:2),bufferForPlaybackAfterRebufferDuration:Duration(seconds:4))));
   final api=RadioApi();
   List<Station> _active=[];
   Station? current;
@@ -45,14 +45,15 @@ class RadioHandler extends BaseAudioHandler {
   void _observe(PlayerState state){
     _broadcast();
     if(!_wanted||_opening||_recovering)return;
+    if(!state.playing){_stall?.cancel();_stall=null;_stable?.cancel();_stable=null;return;}
     final generation=_generation;
     if(state.processingState==ProcessingState.completed){
       _scheduleRetry(generation,'Stream ended');
       return;
     }
-    if(state.playing&&state.processingState==ProcessingState.buffering){
+    if(state.playing&&(state.processingState==ProcessingState.buffering||state.processingState==ProcessingState.loading||state.processingState==ProcessingState.idle)){
       _stable?.cancel();_stable=null;
-      _stall??=Timer(const Duration(seconds:25),(){_stall=null;_scheduleRetry(generation,'Buffering timeout');});
+      _stall??=Timer(const Duration(seconds:15),(){_stall=null;_scheduleRetry(generation,'Buffering timeout');});
     }else{
       _stall?.cancel();_stall=null;
     }
@@ -70,13 +71,15 @@ class RadioHandler extends BaseAudioHandler {
     player.playerStateStream.listen(_observe);
   }
   void _broadcast(){
+    final active=_failure==null&&_wanted&&(_opening||_recovering||player.playing);
+    final processing=_failure!=null?AudioProcessingState.error:(_wanted&&(_opening||_recovering||player.processingState==ProcessingState.idle))?AudioProcessingState.buffering:const {ProcessingState.idle:AudioProcessingState.idle,ProcessingState.loading:AudioProcessingState.loading,ProcessingState.buffering:AudioProcessingState.buffering,ProcessingState.ready:AudioProcessingState.ready,ProcessingState.completed:AudioProcessingState.completed}[player.processingState]!;
     playbackState.add(PlaybackState(
-      controls:[MediaControl.skipToPrevious,(_recovering||player.playing)?MediaControl.pause:MediaControl.play,MediaControl.skipToNext,MediaControl.stop],
+      controls:[MediaControl.skipToPrevious,active?MediaControl.pause:MediaControl.play,MediaControl.skipToNext,MediaControl.stop],
       androidCompactActionIndices:const [0,1,2],
       systemActions:const {MediaAction.playFromMediaId,MediaAction.playFromSearch,MediaAction.playPause},
       errorMessage:_failure,
-      processingState:_failure!=null?AudioProcessingState.error:_recovering?AudioProcessingState.buffering:const {ProcessingState.idle:AudioProcessingState.idle,ProcessingState.loading:AudioProcessingState.loading,ProcessingState.buffering:AudioProcessingState.buffering,ProcessingState.ready:AudioProcessingState.ready,ProcessingState.completed:AudioProcessingState.completed}[player.processingState]!,
-      playing:_failure==null&&(_recovering||player.playing),updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
+      processingState:processing,
+      playing:active,updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
   }
   MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:s.logo.startsWith('http')?Uri.tryParse(s.logo):null,extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
   Station station(MediaItem m)=>Station(m.id,m.extras?['stationName'] as String? ?? m.title,m.extras?['url'] as String? ?? '',m.extras?['country'] as String? ?? '',m.extras?['logo'] as String? ?? '');
@@ -145,8 +148,11 @@ class RadioHandler extends BaseAudioHandler {
         final base=item(s);
         mediaItem.add(title==null?base:base.copyWith(title:title,artist:s.name,album:s.country));
       });
+      // Keep the session in buffering until play has been requested. Never
+      // advertise idle during a reconnect, since idle stops AudioService.
+      final playback=player.play();
       _opening=false;_recovering=false;
-      unawaited(player.play().catchError((Object e){_scheduleRetry(generation,e.toString());}));
+      unawaited(playback.catchError((Object e){_scheduleRetry(generation,e.toString());}));
       _observe(player.playerState);
     }catch(e){
       if(_valid(generation)){_opening=false;_scheduleRetry(generation,e.toString());}
