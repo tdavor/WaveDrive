@@ -23,15 +23,15 @@ jobs:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
-      - name: Publish v1.0.0-alpha.4
+      - name: Publish v1.0.0-alpha.5
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.0-alpha.4 >/dev/null 2>&1; then
+          if gh release view v1.0.0-alpha.5 >/dev/null 2>&1; then
             echo "Release already exists"
           else
-            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.0-alpha.4-arm64.apk
-            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.0-alpha.4-arm32.apk
-            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.0-alpha.4-x86_64.apk
-            gh release create v1.0.0-alpha.4 WaveDrive-v1.0.0-alpha.4-*.apk --target "$GITHUB_SHA" --title "WaveDrive v1.0.0-alpha.4" --prerelease --notes "Expanded Now Playing screen, ICY song metadata on phone and Android Auto, About menu. Requires device testing. No AAB."
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.0-alpha.5-arm64.apk
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.0-alpha.5-arm32.apk
+            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.0-alpha.5-x86_64.apk
+            gh release create v1.0.0-alpha.5 WaveDrive-v1.0.0-alpha.5-*.apk --target "$GITHUB_SHA" --title "WaveDrive v1.0.0-alpha.5" --prerelease --notes "Live stream automatic reconnect, buffering watchdog, foreground audio service, Android Auto playback controls. Device testing required. No AAB."
           fi
