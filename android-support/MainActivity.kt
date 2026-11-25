@@ -4,6 +4,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.app.ActivityManager
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -23,6 +25,22 @@ class MainActivity : AudioServiceActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "batteryStatus" -> {
+                        val power = getSystemService(POWER_SERVICE) as PowerManager
+                        val activity = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+                        result.success(mapOf(
+                            "exempt" to (Build.VERSION.SDK_INT < 23 || power.isIgnoringBatteryOptimizations(packageName)),
+                            "restricted" to (Build.VERSION.SDK_INT >= 28 && activity.isBackgroundRestricted)
+                        ))
+                    }
+                    "batterySettings" -> {
+                        try {
+                            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("SETTINGS", e.message, null)
+                        }
+                    }
                     "device" -> {
                         @Suppress("DEPRECATION")
                         val info = packageManager.getPackageInfo(packageName, 0)
