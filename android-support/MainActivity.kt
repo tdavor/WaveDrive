@@ -40,7 +40,7 @@ class MainActivity : AudioServiceActivity() {
                             Thread {
                                 try {
                                     apkFile.parentFile?.mkdirs()
-                                    val temp = File(apkFile.parentFile, "download.tmp")
+                                    val temp = File(apkFile.parentFile, "download.apk")
                                     try {
                                         var url = URL(address)
                                         var done = false
