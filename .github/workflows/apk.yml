@@ -41,15 +41,15 @@ jobs:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
-      - name: Publish v1.0.2
+      - name: Publish v1.0.3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.2 >/dev/null 2>&1; then
+          if gh release view v1.0.3 >/dev/null 2>&1; then
             echo "Release already exists"
           else
-            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.2-arm64.apk
-            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.2-arm32.apk
-            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.2-x86_64.apk
-            gh release create v1.0.2 WaveDrive-v1.0.2-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Background playback reliability, CPU and Wi-Fi wake mode, media notification and reconnect fixes. Android Auto and automatic updates retained."
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.3-arm64.apk
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.3-arm32.apk
+            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.3-x86_64.apk
+            gh release create v1.0.3 WaveDrive-v1.0.3-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Optional first-launch background battery setup and settings shortcut. Playback, Android Auto, signing and updates retained."
           fi
