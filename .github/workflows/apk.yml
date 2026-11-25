@@ -17,21 +17,39 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - run: bash scripts/build-apk.sh
+      - name: Prepare persistent APK signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.WAVEDRIVE_KEYSTORE_BASE64 }}
+          WAVEDRIVE_KEYSTORE_PASSWORD: ${{ secrets.WAVEDRIVE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$WAVEDRIVE_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Configure WAVEDRIVE_KEYSTORE_BASE64 and WAVEDRIVE_KEYSTORE_PASSWORD repository secrets. See docs/SIGNING.md."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/wavedrive.p12"
+          echo "WAVEDRIVE_KEYSTORE=$RUNNER_TEMP/wavedrive.p12" >> "$GITHUB_ENV"
+      - name: Build signed APKs
+        env:
+          WAVEDRIVE_KEYSTORE_PASSWORD: ${{ secrets.WAVEDRIVE_KEYSTORE_PASSWORD }}
+        run: bash scripts/build-apk.sh
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/wavedrive.p12"
       - uses: actions/upload-artifact@v4
         with:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
-      - name: Publish v1.0.0-alpha.5
+      - name: Publish v1.0.0-alpha.6
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.0-alpha.5 >/dev/null 2>&1; then
+          if gh release view v1.0.0-alpha.6 >/dev/null 2>&1; then
             echo "Release already exists"
           else
-            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.0-alpha.5-arm64.apk
-            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.0-alpha.5-arm32.apk
-            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.0-alpha.5-x86_64.apk
-            gh release create v1.0.0-alpha.5 WaveDrive-v1.0.0-alpha.5-*.apk --target "$GITHUB_SHA" --title "WaveDrive v1.0.0-alpha.5" --prerelease --notes "Live stream automatic reconnect, buffering watchdog, foreground audio service, Android Auto playback controls. Device testing required. No AAB."
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.0-alpha.6-arm64.apk
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.0-alpha.6-arm32.apk
+            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.0-alpha.6-x86_64.apk
+            gh release create v1.0.0-alpha.6 WaveDrive-v1.0.0-alpha.6-*.apk --target "$GITHUB_SHA" --title "WaveDrive v1.0.0-alpha.6" --prerelease --notes "Automatic startup update check and verified APK installer. First installation may require uninstalling earlier test APK signed with a different key. No AAB."
           fi
