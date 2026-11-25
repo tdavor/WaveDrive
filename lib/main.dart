@@ -9,11 +9,11 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.1';
+const appVersion='1.0.2';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.playback',androidNotificationChannelName:'WaveDrive playback',androidNotificationOngoing:false,androidStopForegroundOnPause:false));
+  radio=await AudioService.init(builder:()=>RadioHandler(),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.media',androidNotificationChannelName:'WaveDrive media playback',androidNotificationIcon:'drawable/ic_wavedrive_notification',androidNotificationClickStartsActivity:true,androidNotificationOngoing:false,androidStopForegroundOnPause:false));
   final session=await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());
   runApp(const MaterialApp(debugShowCheckedModeBanner:false,home:RadioHome()));
