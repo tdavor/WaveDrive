@@ -4,12 +4,13 @@ import 'radio_handler.dart';
 import 'update_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.2';
+const appVersion='1.0.3';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,8 +41,42 @@ class _RadioHomeState extends State<RadioHome> {
     List<Station> read(String key)=>(jsonDecode(p.getString(key)??'[]') as List).map((j)=>Station.fromJson(Map<String,dynamic>.from(j))).toList();
     if(!mounted)return;
     setState((){favorites=read('favorites');recent=read('recent');lang=p.getString('language')??'en';});
-    unawaited(checkUpdate());
+    unawaited(startupChecks());
     await search();
+  }
+  static const _batteryChannel=MethodChannel('wavedrive/update');
+  bool _batteryDialogOpen=false;
+  Future<void> startupChecks() async {
+    await checkUpdate();
+    if(!mounted||WidgetsBinding.instance.lifecycleState!=AppLifecycleState.resumed)return;
+    await batterySetup();
+  }
+  Future<void> batterySetup({bool manual=false}) async {
+    if(_batteryDialogOpen||!mounted)return;
+    _batteryDialogOpen=true;
+    try{
+      final prefs=await SharedPreferences.getInstance();
+      if(!manual&&(prefs.getBool('battery_help_seen')??false))return;
+      final status=await _batteryChannel.invokeMapMethod<String,dynamic>('batteryStatus');
+      if(!mounted||status==null)return;
+      final exempt=status['exempt']==true;
+      final restricted=status['restricted']==true;
+      if(!manual&&exempt&&!restricted){await prefs.setBool('battery_help_seen',true);return;}
+      if(WidgetsBinding.instance.lifecycleState!=AppLifecycleState.resumed)return;
+      final open=await showDialog<bool>(context:context,builder:(ctx)=>Theme(data:radioTheme,child:AlertDialog(
+        title:Text(tr('Background playback','Uppspelning i bakgrunden','Reprodukcija u pozadini')),
+        content:Text(exempt&&!restricted
+          ?tr('Android currently reports no battery restriction for WaveDrive. You can review your battery settings.','Android rapporterar inga batteribegränsningar för WaveDrive. Du kan kontrollera inställningarna.','Android trenutačno ne prijavljuje ograničenja baterije za WaveDrive. Postavke možete provjeriti.')
+          :tr('If radio stops when the screen is off, open app settings and allow background battery usage. Choose Unrestricted if available. This is optional and may increase battery use.','Om radion stannar när skärmen är släckt, öppna appinställningarna och tillåt batterianvändning i bakgrunden. Välj Obegränsad om alternativet finns. Det är frivilligt och kan öka batteriförbrukningen.','Ako radio prestaje svirati kada je zaslon ugašen, otvorite postavke aplikacije i dopustite korištenje baterije u pozadini. Odaberite Neograničeno ako je dostupno. Ovo nije obavezno i može povećati potrošnju baterije.')),
+        actions:[
+          TextButton(onPressed:()=>Navigator.of(ctx).pop(false),child:Text(tr('Later','Senare','Kasnije'))),
+          TextButton(onPressed:()=>Navigator.of(ctx).pop(true),child:Text(tr('Open settings','Öppna inställningar','Otvori postavke')))
+        ]
+      )));
+      await prefs.setBool('battery_help_seen',true);
+      if(open==true&&mounted)await _batteryChannel.invokeMethod<bool>('batterySettings');
+    }catch(e){debugPrint('WaveDrive battery setup: $e');}
+    finally{_batteryDialogOpen=false;}
   }
   Future<void> save() async {
     final p=await SharedPreferences.getInstance();
@@ -131,7 +166,7 @@ class _RadioHomeState extends State<RadioHome> {
         Text('Your road. Your radio.'),SizedBox(height:16),
         Text(tr('Version','Version','Verzija')+': '+appVersion),const SizedBox(height:8),Text(tr('Author','Författare','Autor')+': t.davor@gmail.com')
       ]),
-      actions:[TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(checkUpdate(manual:true));},child:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje'))),TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
+      actions:[TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(batterySetup(manual:true));},child:Text(tr('Battery settings','Batteriinställningar','Postavke baterije'))),TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(checkUpdate(manual:true));},child:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje'))),TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
     )));
   }
   void openPlayer([Station? selected]){
