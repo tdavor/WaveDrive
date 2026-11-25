@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:async';
 import 'radio_handler.dart';
-late RadioHandler radio;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
+
+late RadioHandler radio;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,7 @@ class _RadioHomeState extends State<RadioHome> {
   Future<void> save() async {
     final p=await SharedPreferences.getInstance();
     await p.setString('favorites',jsonEncode(favorites.map((s)=>s.toJson()).toList()));
-    radio.notifyChildrenChanged('favorites');
+    radio.refreshChildren('favorites');
     await p.setString('language',lang);
   }
   Future<void> search() async {
