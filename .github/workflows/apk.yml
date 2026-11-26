@@ -45,20 +45,29 @@ jobs:
       - name: Remove temporary signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/wavedrive.p12"
+      - name: Verify Android Auto manifest in APK
+        run: |
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)"
+          test -x "$AAPT"
+          "$AAPT" dump xmltree build/app/outputs/flutter-apk/app-arm64-v8a-release.apk AndroidManifest.xml > "$RUNNER_TEMP/wavedrive-manifest.txt"
+          grep -F 'com.google.android.gms.car.application' "$RUNNER_TEMP/wavedrive-manifest.txt"
+          grep -F 'android.media.browse.MediaBrowserService' "$RUNNER_TEMP/wavedrive-manifest.txt"
+          grep -F 'com.ryanheise.audioservice.AudioService' "$RUNNER_TEMP/wavedrive-manifest.txt"
+          grep -F 'androidx.car.app.TintableAttributionIcon' "$RUNNER_TEMP/wavedrive-manifest.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
-      - name: Publish v1.0.7
+      - name: Publish v1.0.8
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.7 >/dev/null 2>&1; then
+          if gh release view v1.0.8 >/dev/null 2>&1; then
             echo "Release already exists"
           else
-            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.7-arm64.apk
-            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.7-arm32.apk
-            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.7-x86_64.apk
-            gh release create v1.0.7 WaveDrive-v1.0.7-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Fix worldwide station search without country selection, preserve optional country filters, improve empty results feedback. Android Auto, settings and updates retained."
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.8-arm64.apk
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.8-arm32.apk
+            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.8-x86_64.apk
+            gh release create v1.0.8 WaveDrive-v1.0.8-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Android Auto service cold-start and browsing improvements, recent station playback, explicit car launcher branding, and APK manifest verification. Sideloaded media apps require Android Auto Unknown sources. Vehicle testing pending."
           fi

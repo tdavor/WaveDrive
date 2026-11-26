@@ -13,7 +13,7 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.7';
+const appVersion='1.0.8';
 const donationUrl='https://buymeacoffee.com/wjkrddbhyx';
 const brandLogo='assets/branding/wavedrive.webp';
 
@@ -28,7 +28,7 @@ Future<Uri?> prepareBrandArtwork() async {
 }
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final fallbackArt=await prepareBrandArtwork();
+  final fallbackArt=await prepareBrandArtwork().timeout(const Duration(seconds:2),onTimeout:()=>null);
   radio=await AudioService.init(builder:()=>RadioHandler(fallbackArt:fallbackArt),config:const AudioServiceConfig(androidNotificationChannelId:'com.wavedrive.radio.media',androidNotificationChannelName:'WaveDrive media playback',androidNotificationIcon:'drawable/ic_wavedrive_notification',androidNotificationClickStartsActivity:true,androidNotificationOngoing:false,androidStopForegroundOnPause:false));
   final session=await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());
@@ -64,7 +64,7 @@ class RadioHome extends StatefulWidget {
   const RadioHome({super.key});
   @override State<RadioHome> createState()=>_RadioHomeState();
 }
-class _RadioHomeState extends State<RadioHome> {
+class _RadioHomeState extends State<RadioHome> with WidgetsBindingObserver {
   final api=RadioApi(), query=TextEditingController();
   List<Station> stations=[], favorites=[], recent=[];
   Station? current;
@@ -74,8 +74,19 @@ class _RadioHomeState extends State<RadioHome> {
   String tr(String en,String sv,String hr)=>lang=='sv'?sv:lang=='hr'?hr:en;
   StreamSubscription<MediaItem?>? mediaSub;
   StreamSubscription<int>? historySub;
-  @override void initState(){super.initState();init();mediaSub=radio.mediaItem.listen((m){if(m!=null&&mounted){setState(()=>current=radio.station(m));}});historySub=radio.historyChanged.listen((_) {radio.stored('recent').then((v){if(mounted)setState(()=>recent=v);});});}
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);init();mediaSub=radio.mediaItem.listen((m){if(m!=null&&mounted){setState(()=>current=radio.station(m));}});historySub=radio.historyChanged.listen((_) {radio.stored('recent').then((v){if(mounted)setState(()=>recent=v);});});}
+  bool _preferencesReady=false,_phoneStartupDone=false;
   bool autoResume=false;
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed)unawaited(_phoneStartup());
+  }
+  Future<void> _phoneStartup() async {
+    if(!mounted||!_preferencesReady||_phoneStartupDone||WidgetsBinding.instance.lifecycleState!=AppLifecycleState.resumed)return;
+    _phoneStartupDone=true;
+    if(autoResume&&recent.isNotEmpty&&radio.current==null){unawaited(radio.select(recent.first,List<Station>.of(recent)));}
+    unawaited(startupChecks());
+    await search();
+  }
   bool checkingUpdate=false;
   final updater=UpdateService();
   Future<void> init() async {
@@ -83,9 +94,8 @@ class _RadioHomeState extends State<RadioHome> {
     List<Station> read(String key)=>(jsonDecode(p.getString(key)??'[]') as List).map((j)=>Station.fromJson(Map<String,dynamic>.from(j))).toList();
     if(!mounted)return;
     setState((){favorites=read('favorites');recent=read('recent');lang=p.getString('language')??'en';autoResume=p.getBool('auto_resume')??false;});
-    if(autoResume&&recent.isNotEmpty&&radio.current==null){unawaited(radio.select(recent.first,List<Station>.of(recent)));}
-    unawaited(startupChecks());
-    await search();
+    _preferencesReady=true;
+    await _phoneStartup();
   }
   static const _batteryChannel=MethodChannel('wavedrive/update');
   bool _batteryDialogOpen=false;
@@ -141,7 +151,7 @@ class _RadioHomeState extends State<RadioHome> {
       final updated=await radio.stored('recent');if(mounted)setState(()=>recent=updated);
     }catch(_){if(mounted&&current==s)setState(()=>error=tr('Stream unavailable','Strömmen är otillgänglig','Stream nije dostupan'));}
   }
-  @override void dispose(){mediaSub?.cancel();historySub?.cancel();query.dispose();super.dispose();}
+  @override void dispose(){WidgetsBinding.instance.removeObserver(this);mediaSub?.cancel();historySub?.cancel();query.dispose();super.dispose();}
   static const panel=Color(0xff202937), cyan=Color(0xff38bdf8);
   Widget artwork(Station s,{double size=52})=>ClipRRect(borderRadius:BorderRadius.circular(12),child:Container(width:size,height:size,color:panel,child:s.logo.startsWith('http')?Image.network(s.logo,fit:BoxFit.contain,errorBuilder:(_,__,___)=>Image.asset(brandLogo,fit:BoxFit.contain)):Image.asset(brandLogo,fit:BoxFit.contain)));
   String flag(String code)=>code.isEmpty?'🌍':String.fromCharCodes(code.codeUnits.map((c)=>c+127397));
@@ -167,7 +177,7 @@ class _RadioHomeState extends State<RadioHome> {
     checkingUpdate=true;
     try{
       final update=await updater.check(appVersion);
-      if(!mounted)return;
+      if(!mounted||WidgetsBinding.instance.lifecycleState!=AppLifecycleState.resumed)return;
       if(update==null){
         if(manual)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr('You have the latest version','Du har senaste versionen','Imate najnoviju verziju'))));
         return;
@@ -188,7 +198,7 @@ class _RadioHomeState extends State<RadioHome> {
       final download=updater.download(update).then((_) async {
         ready.value=true;
         message.value=tr('Update downloaded. Android will ask for installation approval.','Uppdateringen är hämtad. Android ber om installationsgodkännande.','Nadogradnja je preuzeta. Android će zatražiti potvrdu instalacije.');
-        if(mounted)await install();
+        if(mounted&&WidgetsBinding.instance.lifecycleState==AppLifecycleState.resumed)await install();
       }).catchError((Object e){
         message.value=tr('Update download failed: ','Hämtning misslyckades: ','Preuzimanje nije uspjelo: ')+e.toString();
       });
