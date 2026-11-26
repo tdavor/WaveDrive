@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'radio_api.dart';
+import 'car_artwork.dart';
 
 class RadioHandler extends BaseAudioHandler {
   final _children=<String,BehaviorSubject<Map<String,dynamic>>>{};
@@ -21,7 +22,12 @@ class RadioHandler extends BaseAudioHandler {
     final limited=list.take(100).toList();
     _browseLists[group]=limited;
     for(final s in limited){_browseStations[s.id]=s;}
+    unawaited(_prepareBrowseArtwork(group,limited));
     return limited.map(item).toList();
+  }
+  Future<void> _prepareBrowseArtwork(String group,List<Station> stations) async {
+    final results=await Future.wait(stations.map(artwork.prepare));
+    if(results.any((changed)=>changed))refreshChildren(group);
   }
   Station? current;
   int _generation=0;
@@ -85,6 +91,7 @@ class RadioHandler extends BaseAudioHandler {
   }
   final historyChanged=BehaviorSubject<int>.seeded(0);
   final Uri? fallbackArt;
+  late final CarArtwork artwork=CarArtwork(fallbackArt);
   RadioHandler({this.fallbackArt}){
     player.playbackEventStream.listen((_)=>_broadcast(),onError:(Object e,StackTrace st){
       if(!_opening)_scheduleRetry(_generation,e.toString());
@@ -102,22 +109,41 @@ class RadioHandler extends BaseAudioHandler {
       processingState:processing,
       playing:active,updatePosition:player.position,bufferedPosition:player.bufferedPosition,speed:player.speed));
   }
-  Uri? stationArt(Station s){
-    final uri=Uri.tryParse(s.logo.trim());
-    return uri!=null&&(uri.scheme=='http'||uri.scheme=='https')&&uri.host.isNotEmpty?uri:fallbackArt;
+  MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,displayTitle:s.name,displaySubtitle:s.country,artUri:artwork.uri(s),extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
+  MediaItem _playingItem(Station s){
+    final base=item(s);
+    final song=nowPlaying.value;
+    final path=artwork.localPath(s);
+    return base.copyWith(title:song??s.name,artist:song==null?null:s.name,displayTitle:song??s.name,displaySubtitle:song==null?s.country:s.name,extras:{...base.extras!,if(path!=null)'artCacheFile':path});
   }
-  MediaItem item(Station s)=>MediaItem(id:s.id,title:s.name,album:s.country,artUri:stationArt(s),extras:{'url':s.url,'country':s.country,'logo':s.logo,'stationName':s.name});
+  Future<void> _preparePlayingArtwork(Station s,int generation) async {
+    if(await artwork.prepare(s)&&_valid(generation)&&current?.id==s.id){
+      mediaItem.add(_playingItem(s));
+    }
+  }
+  static const _countries=<String,List<String>>{
+    'SE':['Sweden','Sverige','Švedska'],'HR':['Croatia','Kroatien','Hrvatska'],'GB':['United Kingdom','Storbritannien','Ujedinjeno Kraljevstvo'],'DE':['Germany','Tyskland','Njemačka'],'US':['USA','USA','SAD'],'IT':['Italy','Italien','Italija'],'FR':['France','Frankrike','Francuska'],'NO':['Norway','Norge','Norveška'],'DK':['Denmark','Danmark','Danska'],'FI':['Finland','Finland','Finska'],'BA':['Bosnia and Herzegovina','Bosnien och Hercegovina','Bosna i Hercegovina'],'RS':['Serbia','Serbien','Srbija'],'SI':['Slovenia','Slovenien','Slovenija'],'ES':['Spain','Spanien','Španjolska'],'PL':['Poland','Polen','Poljska'],'AU':['Australia','Australien','Australija'],'CA':['Canada','Kanada','Kanada'],'JP':['Japan','Japan','Japan'],'BR':['Brazil','Brasilien','Brazil'],'IN':['India','Indien','Indija'],
+  };
+  static const _genres=<String,List<String>>{
+    'news':['News','Nyheter','Vijesti'],'pop':['Pop','Pop','Pop'],'rock':['Rock','Rock','Rock'],'dance':['Dance','Dans','Dance'],'jazz':['Jazz','Jazz','Jazz'],'classical':['Classical','Klassiskt','Klasična'],'80s':['80s','80-tal','80-e'],'90s':['90s','90-tal','90-e'],'local':['Local','Lokalt','Lokalno'],
+  };
+  MediaItem _folder(String id,String title)=>MediaItem(id:id,title:title,artUri:artwork.logo,playable:false);
   Station station(MediaItem m)=>Station(m.id,m.extras?['stationName'] as String? ?? m.title,m.extras?['url'] as String? ?? '',m.extras?['country'] as String? ?? '',m.extras?['logo'] as String? ?? '');
   Future<List<Station>> stored(String key) async {
     final p=await SharedPreferences.getInstance();await p.reload();
     return (jsonDecode(p.getString(key)??'[]') as List).map((j)=>Station.fromJson(Map<String,dynamic>.from(j))).toList();
   }
   @override Future<List<MediaItem>> getChildren(String parentMediaId,[Map<String,dynamic>? options]) async {
-    if(parentMediaId==AudioService.browsableRootId){
+    if(parentMediaId==AudioService.browsableRootId||parentMediaId=='countries'||parentMediaId=='genres'){
       final p=await SharedPreferences.getInstance();await p.reload();
       final lang=p.getString('language')??'en';
       String tr(String en,String sv,String hr)=>lang=='sv'?sv:lang=='hr'?hr:en;
-      return [MediaItem(id:'favorites',title:tr('Favorites','Favoriter','Omiljene'),playable:false),MediaItem(id:'recent',title:tr('Recent','Senaste','Nedavno'),playable:false),MediaItem(id:'popular',title:tr('Popular stations','Populära stationer','Popularne stanice'),playable:false)];
+      if(parentMediaId=='countries'||parentMediaId=='genres'){
+        final groups=parentMediaId=='countries'?_countries:_genres;
+        final prefix=parentMediaId=='countries'?'country:':'genre:';
+        return groups.entries.map((entry)=>_folder(prefix+entry.key,tr(entry.value[0],entry.value[1],entry.value[2]))).toList();
+      }
+      return [_folder('favorites',tr('Favorites','Favoriter','Omiljene')),_folder('recent',tr('Recent','Senaste','Nedavno')),_folder('popular',tr('Popular stations','Populära stationer','Popularne stanice')),_folder('countries',tr('Countries','Länder','Države')),_folder('genres',tr('Genres','Genrer','Žanrovi'))];
     }
     try{
       if(parentMediaId==AudioService.recentRootId)return _remember('recent',await stored('recent'));
@@ -125,6 +151,14 @@ class RadioHandler extends BaseAudioHandler {
       if(parentMediaId=='popular'){
         if(_popularFetched!=null&&DateTime.now().difference(_popularFetched!)<const Duration(minutes:5))return _remember('popular',_browseLists['popular']??[]);
         final list=await api.search('','');_popularFetched=DateTime.now();return _remember('popular',list);
+      }
+      if(parentMediaId.startsWith('country:')||parentMediaId.startsWith('genre:')){
+        final value=parentMediaId.substring(parentMediaId.indexOf(':')+1);
+        final country=parentMediaId.startsWith('country:');
+        if(!(country?_countries:_genres).containsKey(value))return [];
+        final cached=_browseLists[parentMediaId];
+        if(cached!=null)return _remember(parentMediaId,cached);
+        return _remember(parentMediaId,await api.search('',country?value:'',tag:country?'':value));
       }
       return [];
     }catch(_){return (_browseLists[parentMediaId]??[]).map(item).toList();}
@@ -153,7 +187,8 @@ class RadioHandler extends BaseAudioHandler {
     final generation=++_generation;
     _cancelTimers();_wanted=true;_attempt=0;_failure=null;_recovering=false;_opening=true;
     _active=list.isEmpty?[s]:List.of(list);
-    current=s;nowPlaying.add(null);mediaItem.add(item(s));
+    current=s;nowPlaying.add(null);mediaItem.add(_playingItem(s));
+    unawaited(_preparePlayingArtwork(s,generation));
     await _connect(s,generation);
     if(!_valid(generation))return;
     try{
@@ -181,8 +216,7 @@ class RadioHandler extends BaseAudioHandler {
         final title=raw==null||raw.isEmpty?null:raw;
         if(nowPlaying.value==title)return;
         nowPlaying.add(title);
-        final base=item(s);
-        mediaItem.add(title==null?base:base.copyWith(title:title,artist:s.name,album:s.country));
+        mediaItem.add(_playingItem(s));
       });
       // Keep the session in buffering until play has been requested. Never
       // advertise idle during a reconnect, since idle stops AudioService.
