@@ -14,6 +14,15 @@ class RadioHandler extends BaseAudioHandler {
   final player=AudioPlayer(audioLoadConfiguration:const AudioLoadConfiguration(androidLoadControl:AndroidLoadControl(minBufferDuration:Duration(seconds:30),maxBufferDuration:Duration(seconds:60),bufferForPlaybackDuration:Duration(seconds:2),bufferForPlaybackAfterRebufferDuration:Duration(seconds:4))));
   final api=RadioApi();
   List<Station> _active=[];
+  final Map<String,Station> _browseStations={};
+  final Map<String,List<Station>> _browseLists={};
+  DateTime? _popularFetched;
+  List<MediaItem> _remember(String group,List<Station> list){
+    final limited=list.take(100).toList();
+    _browseLists[group]=limited;
+    for(final s in limited){_browseStations[s.id]=s;}
+    return limited.map(item).toList();
+  }
   Station? current;
   int _generation=0;
   bool _wanted=false, _opening=false, _recovering=false;
@@ -111,18 +120,29 @@ class RadioHandler extends BaseAudioHandler {
       return [MediaItem(id:'favorites',title:tr('Favorites','Favoriter','Omiljene'),playable:false),MediaItem(id:'recent',title:tr('Recent','Senaste','Nedavno'),playable:false),MediaItem(id:'popular',title:tr('Popular stations','Populära stationer','Popularne stanice'),playable:false)];
     }
     try{
-      final list=parentMediaId=='favorites'||parentMediaId=='recent'?await stored(parentMediaId):parentMediaId=='popular'?await api.search('',''):<Station>[];
-      return list.take(100).map(item).toList();
-    }catch(_){return [];}
+      if(parentMediaId==AudioService.recentRootId)return _remember('recent',await stored('recent'));
+      if(parentMediaId=='favorites'||parentMediaId=='recent')return _remember(parentMediaId,await stored(parentMediaId));
+      if(parentMediaId=='popular'){
+        if(_popularFetched!=null&&DateTime.now().difference(_popularFetched!)<const Duration(minutes:5))return _remember('popular',_browseLists['popular']??[]);
+        final list=await api.search('','');_popularFetched=DateTime.now();return _remember('popular',list);
+      }
+      return [];
+    }catch(_){return (_browseLists[parentMediaId]??[]).map(item).toList();}
   }
   @override Future<MediaItem?> getMediaItem(String mediaId) async {
     if(current?.id==mediaId)return item(current!);
+    final cached=_browseStations[mediaId];if(cached!=null)return item(cached);
     for(final key in ['favorites','recent','popular']){
       for(final m in await getChildren(key)){if(m.id==mediaId)return m;}
     }
     return null;
   }
   @override Future<void> playFromMediaId(String mediaId,[Map<String,dynamic>? extras]) async {
+    final cached=_browseStations[mediaId];
+    if(cached!=null){
+      final list=_browseLists.values.firstWhere((list)=>list.any((s)=>s.id==mediaId),orElse:()=>[cached]);
+      await select(cached,list);return;
+    }
     for(final key in ['favorites','recent','popular']){
       final list=await getChildren(key);
       for(final m in list){if(m.id==mediaId){await select(station(m),list.map(station).toList());return;}}
@@ -177,7 +197,11 @@ class RadioHandler extends BaseAudioHandler {
     }
   }
   @override Future<void> play() async {
-    final s=current;if(s==null)return;
+    final s=current;
+    if(s==null){
+      try{final recent=await stored('recent');if(current==null&&recent.isNotEmpty)await select(recent.first,recent);}catch(e){print('WaveDrive: resume failed: $e');}
+      return;
+    }
     if(_wanted&&(_opening||_recovering||player.playing))return;
     _cancelTimers();_wanted=true;_attempt=0;_failure=null;
     if(player.processingState==ProcessingState.idle||player.processingState==ProcessingState.completed){
@@ -202,5 +226,5 @@ class RadioHandler extends BaseAudioHandler {
   @override Future<void> skipToNext()=>_skip(1);
   @override Future<void> skipToPrevious()=>_skip(-1);
   @override Future<void> playFromSearch(String query,[Map<String,dynamic>? extras]) async {final list=await api.search(query,'');if(list.isNotEmpty)await select(list.first,list);}
-  @override Future<List<MediaItem>> search(String query,[Map<String,dynamic>? extras]) async => (await api.search(query,'')).map(item).toList();
+  @override Future<List<MediaItem>> search(String query,[Map<String,dynamic>? extras]) async => _remember('search',await api.search(query,''));
 }
