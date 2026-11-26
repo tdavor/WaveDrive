@@ -13,7 +13,7 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.8';
+const appVersion='1.0.9';
 const donationUrl='https://buymeacoffee.com/wjkrddbhyx';
 const brandLogo='assets/branding/wavedrive.webp';
 
