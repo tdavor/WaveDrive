@@ -19,8 +19,9 @@ class RadioApi {
       'hidebroken':'true','order':'votes','reverse':'true','limit':'100',
     };
   }
-  Future<List<Station>> search(String name, String country) async {
+  Future<List<Station>> search(String name, String country,{String tag=''}) async {
     final parameters=searchParameters(name,country);
+    if(tag.trim().isNotEmpty)parameters['tag']=tag.trim();
     for(final host in ['de1.api.radio-browser.info','nl1.api.radio-browser.info']) {
       try {
         final uri=Uri.https(host,'/json/stations/search',parameters);
