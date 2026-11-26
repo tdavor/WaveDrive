@@ -71,3 +71,20 @@ print('Enabled ExoPlayer network wake mode')
 PY
 flutter analyze --no-fatal-infos --no-fatal-warnings lib
 flutter build apk --release --split-per-abi
+
+# Build a Play-specific bundle after the regular GitHub APKs. Play manages
+# updates itself, so the bundle does not request APK installation permission.
+if [[ "${BUILD_PLAY_BUNDLE:-0}" == "1" ]]; then
+python3 - <<'PYPLAY'
+from pathlib import Path
+p=Path('android/app/src/main/AndroidManifest.xml')
+s=p.read_text()
+permission='<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
+assert permission in s, 'Expected sideload permission not found'
+s=s.replace(permission, '')
+p.write_text(s)
+PYPLAY
+flutter build appbundle --release --dart-define=PLAY_STORE=true
+test -s build/app/outputs/bundle/release/app-release.aab
+jarsigner -verify build/app/outputs/bundle/release/app-release.aab
+fi

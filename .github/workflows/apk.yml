@@ -38,8 +38,9 @@ jobs:
           umask 077
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/wavedrive.p12"
           echo "WAVEDRIVE_KEYSTORE=$RUNNER_TEMP/wavedrive.p12" >> "$GITHUB_ENV"
-      - name: Build signed APKs
+      - name: Build signed APKs and Play App Bundle
         env:
+          BUILD_PLAY_BUNDLE: '1'
           WAVEDRIVE_KEYSTORE_PASSWORD: ${{ secrets.WAVEDRIVE_KEYSTORE_PASSWORD }}
         run: bash scripts/build-apk.sh
       - name: Remove temporary signing key
@@ -61,6 +62,11 @@ jobs:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WaveDrive-v1.0.9-Play-Bundle
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
       - name: Publish v1.0.9
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,4 +78,10 @@ jobs:
             cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.9-arm32.apk
             cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.9-x86_64.apk
             gh release create v1.0.9 WaveDrive-v1.0.9-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Android Auto: WaveDrive cyan accent, logo, station artwork fallback, station and song metadata, and localized categories. Phone interface unchanged."
+          fi
+          cp build/app/outputs/bundle/release/app-release.aab WaveDrive-v1.0.9.aab
+          if gh release view v1.0.9 --json assets --jq '.assets[].name' | grep -Fxq 'WaveDrive-v1.0.9.aab'; then
+            echo "App Bundle already attached"
+          else
+            gh release upload v1.0.9 WaveDrive-v1.0.9.aab
           fi
