@@ -13,7 +13,8 @@ import 'package:audio_session/audio_session.dart';
 import 'radio_api.dart';
 
 late RadioHandler radio;
-const appVersion='1.0.9';
+const appVersion='1.0.10';
+const privacyUrl='https://github.com/tdavor/WaveDrive/blob/main/docs/PRIVACY.md';
 const playStoreBuild=bool.fromEnvironment('PLAY_STORE',defaultValue:false);
 const donationUrl='https://buymeacoffee.com/wjkrddbhyx';
 const brandLogo='assets/branding/wavedrive.webp';
@@ -284,6 +285,10 @@ class _RadioHomeState extends State<RadioHome> with WidgetsBindingObserver {
               if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(tr('Could not open link','Kunde inte öppna länken','Poveznica se ne može otvoriti'))));
             },
           ),
+          ListTile(leading:const Icon(Icons.privacy_tip_outlined,color:cyan),title:Text(tr('Privacy policy','Integritetspolicy','Pravila privatnosti')),trailing:const Icon(Icons.open_in_new),onTap:() async {
+            try{if(await launchUrl(Uri.parse(privacyUrl),mode:LaunchMode.externalApplication))return;}catch(_){}
+            if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(tr('Could not open link','Kunde inte öppna länken','Poveznica se ne može otvoriti'))));
+          }),
           ListTile(leading:const Icon(Icons.info_outline,color:cyan),title:Text(tr('About','Om','O aplikaciji')),onTap:(){Navigator.pop(routeContext);showAbout();})
         ])),
       );
