@@ -42,11 +42,14 @@ class StationArtworkProvider : ContentProvider() {
         val file = artwork(uri)
         val columns = projection?.toList() ?: listOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
         return MatrixCursor(columns.toTypedArray()).apply {
-            addRow(columns.map { when(it) {
-                OpenableColumns.DISPLAY_NAME -> "station.png"
-                OpenableColumns.SIZE -> file.length()
-                else -> null
-            } }.toTypedArray())
+            val row: Array<Any?> = Array(columns.size) { index ->
+                when (columns[index]) {
+                    OpenableColumns.DISPLAY_NAME -> "station.png"
+                    OpenableColumns.SIZE -> file.length()
+                    else -> null
+                }
+            }
+            addRow(row)
         }
     }
     override fun insert(uri: Uri, values: ContentValues?): Uri? = throw UnsupportedOperationException()
