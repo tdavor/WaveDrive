@@ -59,15 +59,15 @@ jobs:
           name: WaveDrive-test-APK
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
-      - name: Publish v1.0.8
+      - name: Publish v1.0.9
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.8 >/dev/null 2>&1; then
+          if gh release view v1.0.9 >/dev/null 2>&1; then
             echo "Release already exists"
           else
-            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.8-arm64.apk
-            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.8-arm32.apk
-            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.8-x86_64.apk
-            gh release create v1.0.8 WaveDrive-v1.0.8-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Android Auto service cold-start and browsing improvements, recent station playback, explicit car launcher branding, and APK manifest verification. Sideloaded media apps require Android Auto Unknown sources. Vehicle testing pending."
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.9-arm64.apk
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.9-arm32.apk
+            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.9-x86_64.apk
+            gh release create v1.0.9 WaveDrive-v1.0.9-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Android Auto: WaveDrive cyan accent, logo, station artwork fallback, station and song metadata, and localized categories. Phone interface unchanged."
           fi
