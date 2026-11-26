@@ -12,7 +12,7 @@ s=s.replace('</application>','''<service android:name="com.ryanheise.audioservic
 <intent-filter><action android:name="android.intent.action.MEDIA_BUTTON"/></intent-filter>
 </receiver>
 </application>''')
-s=s.replace('</application>','<meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc"/><meta-data android:name="androidx.car.app.TintableAttributionIcon" android:resource="@drawable/ic_wavedrive_notification"/></application>')
+s=s.replace('</application>','<meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc"/><meta-data android:name="androidx.car.app.TintableAttributionIcon" android:resource="@drawable/ic_wavedrive_notification"/><meta-data android:name="com.google.android.gms.car.application.theme" android:resource="@style/WaveDriveCarTheme"/></application>')
 s=s.replace('</application>','''<provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths"/></provider></application>''')
 p.write_text(s)
 x=Path('android/app/src/main/res/xml/automotive_app_desc.xml')
@@ -24,10 +24,15 @@ res=Path('android/app/src/main/res')
 (res/'drawable'/'ic_wavedrive_notification.xml').write_text('<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FFFFFFFF" android:pathData="M3,10h2v4H3z M7,6h2v12H7z M11,2h2v20h-2z M15,6h2v12h-2z M19,10h2v4h-2z"/></vector>')
 (res/'raw').mkdir(parents=True,exist_ok=True)
 (res/'raw'/'wavedrive_keep.xml').write_text('<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_wavedrive_notification,@drawable/audio_service_*"/>')
+(res/'values').mkdir(parents=True,exist_ok=True)
+(res/'values'/'wavedrive_car_theme.xml').write_text('<resources><style name="WaveDriveCarTheme" parent="@android:style/Theme.Material.NoActionBar"><item name="android:colorAccent">#38BDF8</item></style></resources>')
+s=p.read_text().replace('</application>','<provider android:name=".StationArtworkProvider" android:authorities="${applicationId}.artwork" android:exported="true" android:grantUriPermissions="true"/></application>')
+p.write_text(s)
 from shutil import copyfile
 activity=Path('android/app/src/main/kotlin/com/wavedrive/wavedrive/MainActivity.kt')
 activity.parent.mkdir(parents=True,exist_ok=True)
 copyfile('android-support/MainActivity.kt',activity)
+copyfile('android-support/StationArtworkProvider.kt',activity.with_name('StationArtworkProvider.kt'))
 g=Path('android/app/build.gradle.kts')
 gradle=g.read_text()
 debug='signingConfig = signingConfigs.getByName("debug")'
