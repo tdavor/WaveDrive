@@ -54,6 +54,8 @@ jobs:
           grep -F 'android.media.browse.MediaBrowserService' "$RUNNER_TEMP/wavedrive-manifest.txt"
           grep -F 'com.ryanheise.audioservice.AudioService' "$RUNNER_TEMP/wavedrive-manifest.txt"
           grep -F 'androidx.car.app.TintableAttributionIcon' "$RUNNER_TEMP/wavedrive-manifest.txt"
+          grep -F 'com.google.android.gms.car.application.theme' "$RUNNER_TEMP/wavedrive-manifest.txt"
+          grep -F 'com.wavedrive.wavedrive.artwork' "$RUNNER_TEMP/wavedrive-manifest.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: WaveDrive-test-APK
