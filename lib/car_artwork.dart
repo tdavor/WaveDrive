@@ -20,7 +20,7 @@ class CarArtwork {
   Uri get logo=>Uri(scheme:'content',host:_authority,path:'/logo');
   Uri uri(Station s){
     final key=_key(s);
-    return key.isEmpty||key.length>180?logo:Uri(scheme:'content',host:_authority,path:'/$key');
+    return key.isEmpty||key.length>180?logo:Uri(scheme:'content',host:_authority,path:'/$key',queryParameters:{'v':_file(s)?.existsSync()==true?'1':'0'});
   }
   File? _file(Station s){
     if(fallback==null||fallback!.scheme!='file')return null;
