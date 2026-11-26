@@ -64,24 +64,24 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: WaveDrive-v1.0.9-Play-Bundle
+          name: WaveDrive-v1.0.10-Play-Bundle
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
-      - name: Publish v1.0.9
+      - name: Publish v1.0.10
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.9 >/dev/null 2>&1; then
+          if gh release view v1.0.10 >/dev/null 2>&1; then
             echo "Release already exists"
           else
-            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.9-arm64.apk
-            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.9-arm32.apk
-            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.9-x86_64.apk
-            gh release create v1.0.9 WaveDrive-v1.0.9-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Android Auto: WaveDrive cyan accent, logo, station artwork fallback, station and song metadata, and localized categories. Phone interface unchanged."
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk WaveDrive-v1.0.10-arm64.apk
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk WaveDrive-v1.0.10-arm32.apk
+            cp build/app/outputs/flutter-apk/app-x86_64-release.apk WaveDrive-v1.0.10-x86_64.apk
+            gh release create v1.0.10 WaveDrive-v1.0.10-*.apk --target "$GITHUB_SHA" --title "WaveDrive" --latest --notes "Public privacy policy linked in app settings. Android Auto features unchanged; signed Play bundle and GitHub APKs."
           fi
-          cp build/app/outputs/bundle/release/app-release.aab WaveDrive-v1.0.9.aab
-          if gh release view v1.0.9 --json assets --jq '.assets[].name' | grep -Fxq 'WaveDrive-v1.0.9.aab'; then
+          cp build/app/outputs/bundle/release/app-release.aab WaveDrive-v1.0.10.aab
+          if gh release view v1.0.10 --json assets --jq '.assets[].name' | grep -Fxq 'WaveDrive-v1.0.10.aab'; then
             echo "App Bundle already attached"
           else
-            gh release upload v1.0.9 WaveDrive-v1.0.9.aab
+            gh release upload v1.0.10 WaveDrive-v1.0.10.aab
           fi
