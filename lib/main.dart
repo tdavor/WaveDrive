@@ -14,6 +14,7 @@ import 'radio_api.dart';
 
 late RadioHandler radio;
 const appVersion='1.0.9';
+const playStoreBuild=bool.fromEnvironment('PLAY_STORE',defaultValue:false);
 const donationUrl='https://buymeacoffee.com/wjkrddbhyx';
 const brandLogo='assets/branding/wavedrive.webp';
 
@@ -173,7 +174,7 @@ class _RadioHomeState extends State<RadioHome> with WidgetsBindingObserver {
   void skip(int delta){unawaited(delta<0?radio.skipToPrevious():radio.skipToNext());}
   ThemeData get radioTheme=>ThemeData.dark(useMaterial3:true).copyWith(scaffoldBackgroundColor:const Color(0xff101520),colorScheme:ColorScheme.fromSeed(seedColor:cyan,brightness:Brightness.dark));
   Future<void> checkUpdate({bool manual=false}) async {
-    if(checkingUpdate)return;
+    if(playStoreBuild||checkingUpdate)return;
     checkingUpdate=true;
     try{
       final update=await updater.check(appVersion);
@@ -270,7 +271,7 @@ class _RadioHomeState extends State<RadioHome> with WidgetsBindingObserver {
             onChanged:(value){if(value==null||!mounted)return;setState(()=>lang=value);refresh((){});unawaited(save());},
           )),
           ListTile(leading:const Icon(Icons.battery_charging_full,color:cyan),title:Text(tr('Battery settings','Batteriinställningar','Postavke baterije')),onTap:(){Navigator.pop(routeContext);unawaited(batterySetup(manual:true));}),
-          ListTile(leading:const Icon(Icons.system_update,color:cyan),title:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje')),onTap:(){Navigator.pop(routeContext);unawaited(checkUpdate(manual:true));}),
+          if(!playStoreBuild)ListTile(leading:const Icon(Icons.system_update,color:cyan),title:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje')),onTap:(){Navigator.pop(routeContext);unawaited(checkUpdate(manual:true));}),
           const Divider(),
           Text(tr('Support','Stöd','Podrška'),style:const TextStyle(color:cyan,fontWeight:FontWeight.bold)),
           ListTile(
@@ -297,7 +298,7 @@ class _RadioHomeState extends State<RadioHome> with WidgetsBindingObserver {
         Text('Your road. Your radio.'),SizedBox(height:16),
         Text(tr('Version','Version','Verzija')+': '+appVersion),const SizedBox(height:8),Text(tr('Author','Författare','Autor')+': t.davor@gmail.com')
       ]),
-      actions:[TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(batterySetup(manual:true));},child:Text(tr('Battery settings','Batteriinställningar','Postavke baterije'))),TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(checkUpdate(manual:true));},child:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje'))),TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
+      actions:[TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(batterySetup(manual:true));},child:Text(tr('Battery settings','Batteriinställningar','Postavke baterije'))),if(!playStoreBuild)TextButton(onPressed:(){Navigator.of(context,rootNavigator:true).pop();unawaited(checkUpdate(manual:true));},child:Text(tr('Check for updates','Sök uppdateringar','Provjeri nadogradnje'))),TextButton(onPressed:()=>Navigator.of(context,rootNavigator:true).pop(),child:Text(tr('Close','Stäng','Zatvori')))]
     )));
   }
   void openPlayer([Station? selected]){
